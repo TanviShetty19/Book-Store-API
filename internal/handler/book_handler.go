@@ -2,6 +2,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"bookstore-api/internal/model"
 	"bookstore-api/internal/service"
 )
 
@@ -41,4 +42,24 @@ func (h *BookHandler) GetBookByID(w http.ResponseWriter, r *http.Request) {
 w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(book)
+}
+
+func (h *BookHandler) CreateBook(w http.ResponseWriter, r *http.Request) {
+	var input model.Book
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"Invalid JSON body"}`))
+		return
+	}
+	createdBook, err := h.service.Create(input)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(createdBook)
 }
