@@ -1,0 +1,10 @@
+[
+  {
+    "id": "1",
+    "title": "The Go Programming Language",
+    "author": "Alan A. A. Donovan",
+    "price": 39.99,
+    "created_at": "2026-08-12T09:00:00Z",
+    "updated_at": "2026-08-12T09:00:00Z"
+  }
+]
