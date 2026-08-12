@@ -54,24 +54,19 @@ func (r * JSONBookRepository) GetAll() ([]model.Book, error){
 
 }
 
-func (r *JSONBookRepository) GetByID(id string) (*model.Book,error){
-	//Lock before reading and Unlock after reading
-	r.mu.Lock()
-	defer r.mu.RUnlock()
+func (r *JSONBookRepository) GetByID(id string) (*model.Book, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock() // Handles unlocking automatically upon function return
 
-	//load books
-	books,err := r.loadBooks()
-	if err != nil{
+	books, err := r.loadBooks()
+	if err != nil {
 		return nil, err
-	} 
-	//search book by id
-	for _, book := range books{
-		if book.ID ==id {
-			if book.ID ==id {
-				return &book, nil //return pointer to specific book
-			}
+	}
+
+	for _, book := range books {
+		if book.ID == id {
+			return &book, nil // Just return; defer handles the unlock!
 		}
-	return nil, errors.New("book not found")
 	}
 
 	return nil, errors.New("book not found")
