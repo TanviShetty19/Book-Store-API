@@ -8,6 +8,7 @@ import (
 // BookService defines the business operations contract
 type BookService interface {
 	GetAll() ([]model.Book, error)
+	GetByID(id string) (*model.Book, error)
 }
 
 // bookService is the concrete implementation holding the repository dependency
@@ -25,4 +26,8 @@ func NewBookService(repo repository.BookRepository) BookService {
 // GetAll delegates data fetching to the repository layer
 func (s *bookService) GetAll() ([]model.Book, error) {
 	return s.repo.GetAll()
+}
+
+func (s *bookService) GetByID(id string) (*model.Book, error) {
+	return s.repo.GetByID(id)
 }
