@@ -27,3 +27,18 @@ func (h * BookHandler) GetAllBooks(w http.ResponseWriter, r *http.Request){
 	json.NewEncoder(w).Encode(books)
 }
 
+func (h *BookHandler) GetBookByID(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	//Ask Bob (service) for the book
+	book, err := h.service.GetByID(id)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		// If book was not found in books.json, return HTTP 404
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"error":"Book not found"}`))
+		return
+	}
+w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(book)
+}
