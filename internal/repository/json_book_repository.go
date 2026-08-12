@@ -24,7 +24,7 @@ func (r *JSONBookRepository) loadBooks() ([]model.Book, error) {
 	file, err := os.ReadFile(r.filePath)
 	if err != nil {
 		if err != nil {
-			if errors.IS(err, os.ErrNotExist){
+			if errors.Is(err, os.ErrNotExist){
 				return [] model.Book{}, nil
 			}
 		}
@@ -71,9 +71,10 @@ func (r *JSONBookRepository) GetByID(id string) (*model.Book,error){
 				return &book, nil //return pointer to specific book
 			}
 		}
-		return nil, errors.New("book not found")
+	return nil, errors.New("book not found")
 	}
 
+	return nil, errors.New("book not found")
 }
 
 func (r *JSONBookRepository) Create(book model.Book) (*model.Book, error){
