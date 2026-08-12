@@ -20,6 +20,7 @@ func main() {
 	//Initialize HTTP Router (mux)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /books", h.GetAllBooks)
+	mux.HandleFunc("GET /books/{id}", h.GetBookByID)
 	//Start Server
 	fmt.Println("Bookstore API server running on http://localhost:8080...")
 	if err := http.ListenAndServe(":8080", mux); err != nil {
