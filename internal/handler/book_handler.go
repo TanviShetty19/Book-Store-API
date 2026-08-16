@@ -23,9 +23,10 @@ func (h * BookHandler) GetAllBooks(w http.ResponseWriter, r *http.Request){
 		w.Write([]byte(`{"error":"Failed to retrieve books"}`))
 		return
 	}
+	response := dto.NewBookResponseList(books)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(books)
+	json.NewEncoder(w).Encode(response)
 }
 
 func (h *BookHandler) GetBookByID(w http.ResponseWriter, r *http.Request) {
@@ -39,42 +40,67 @@ func (h *BookHandler) GetBookByID(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"error":"Book not found"}`))
 		return
 	}
-w.Header().Set("Content-Type", "application/json")
+	response := dto.NewBookResponse(book)
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(book)
+	json.NewEncoder(w).Encode(response)
 }
 
+// CreateBook handles POST /books
 func (h *BookHandler) CreateBook(w http.ResponseWriter, r *http.Request) {
-	var input model.Book
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	var req dto.CreateBookRequest
+
+	// 1. Decode into Inbound DTO
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"error":"Invalid JSON body"}`))
+		w.Write([]byte(`{"error":"Invalid JSON payload"}`))
 		return
 	}
-	createdBook, err := h.service.Create(input)
+
+	// 2. Validate structural input on DTO
+	if err := req.Validate(); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	// 3. Convert DTO to Domain Model and pass to Bob
+	createdBook, err := h.service.Create(*req.ToDomain())
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 		return
 	}
+
+	// 4. Map result to Outbound DTO
+	response := dto.NewBookResponse(createdBook)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(createdBook)
+	json.NewEncoder(w).Encode(response)
 }
 func (h *BookHandler) UpdateBook(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	var input model.Book
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	var req dto.UpdateBookRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"error":"Invalid JSON body"}`))
+		w.Write([]byte(`{"error":"Invalid JSON payload"}`))
 		return
 	}
 
-	updatedBook, err := h.service.Update(id, input)
+	if err := req.Validate(); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	updatedBook, err := h.service.Update(id, *req.ToDomain(id))
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		if err.Error() == "book not found" {
@@ -86,9 +112,11 @@ func (h *BookHandler) UpdateBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	response := dto.NewBookResponse(updatedBook)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(updatedBook)
+	json.NewEncoder(w).Encode(response)
 }
 
 func (h *BookHandler) DeleteBook(w http.ResponseWriter, r *http.Request) {
