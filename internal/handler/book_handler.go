@@ -2,8 +2,8 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
-	"bookstore-api/internal/model"
 	"bookstore-api/internal/service"
+	"bookstore-api/internal/dto"
 )
 
 type BookHandler struct{
