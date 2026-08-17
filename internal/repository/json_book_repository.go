@@ -5,136 +5,142 @@ import (
 	"errors"
 	"os"
 	"sync"
-	"time"
+
 	"bookstore-api/internal/model"
 )
 
-type JSONBookRepository struct { //implements the BookRepository interface
-	filePath string //Path to data/books.json
-	mu       sync.RWMutex //Protects file from concurrent read/write
+// JSONBookRepository implements BookRepository backed by a local JSON file
+type JSONBookRepository struct {
+	mu       sync.RWMutex
+	filePath string
 }
 
-func NewJSONBookRepository(filePath string) BookRepository { //need more clarification on this
-	return &JSONBookRepository{
-		filePath: filePath,
+func NewJSONBookRepository(filePath string) *JSONBookRepository {
+	repo := &JSONBookRepository{filePath: filePath}
+	// Ensure file exists on startup
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		_ = os.WriteFile(filePath, []byte("[]"), 0644)
 	}
+	return repo
 }
 
-func (r *JSONBookRepository) loadBooks() ([]model.Book, error) {
-	file, err := os.ReadFile(r.filePath)
+func (r *JSONBookRepository) load() ([]model.Book, error) {
+	data, err := os.ReadFile(r.filePath)
 	if err != nil {
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist){
-				return [] model.Book{}, nil
-			}
+		if os.IsNotExist(err) {
+			return []model.Book{}, nil
 		}
+		return nil, err
 	}
-	if len(file) == 0{
-		return []model.Book{},nil
+	if len(data) == 0 {
+		return []model.Book{}, nil
 	}
+
 	var books []model.Book
-	if err := json.Unmarshal(file, &books); err !=nil {
+	if err := json.Unmarshal(data, &books); err != nil {
 		return nil, err
 	}
 	return books, nil
 }
 
-func (r *JSONBookRepository) saveBooks(books []model.Book) error{
-	data, err:= json.MarshalIndent(books,"","  ")
+func (r *JSONBookRepository) save(books []model.Book) error {
+	data, err := json.MarshalIndent(books, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(r.filePath, data, 0644) //Owner-Group-Other permissions
+	return os.WriteFile(r.filePath, data, 0644)
 }
 
-func (r * JSONBookRepository) GetAll() ([]model.Book, error){
-	r.mu.RLock()  //Lock for reading ( doesn't block other readers)
+func (r *JSONBookRepository) GetAll() ([]model.Book, error) {
+	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.loadBooks() //read the data and return the slice
-
+	return r.load()
 }
 
 func (r *JSONBookRepository) GetByID(id string) (*model.Book, error) {
 	r.mu.RLock()
-	defer r.mu.RUnlock() // Handles unlocking automatically upon function return
+	defer r.mu.RUnlock()
 
-	books, err := r.loadBooks()
+	books, err := r.load()
 	if err != nil {
 		return nil, err
 	}
 
-	for _, book := range books {
-		if book.ID == id {
-			return &book, nil // Just return; defer handles the unlock!
+	for _, b := range books {
+		if b.ID == id {
+			return &b, nil
+		}
+	}
+	return nil, errors.New("book not found")
+}
+
+func (r *JSONBookRepository) Create(book model.Book) (*model.Book, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	books, err := r.load()
+	if err != nil {
+		return nil, err
+	}
+
+	books = append(books, book)
+	if err := r.save(books); err != nil {
+		return nil, err
+	}
+
+	return &book, nil
+}
+
+func (r *JSONBookRepository) Update(id string, book model.Book) (*model.Book, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	books, err := r.load()
+	if err != nil {
+		return nil, err
+	}
+
+	found := false
+	for i, b := range books {
+		if b.ID == id {
+			books[i] = book
+			found = true
+			break
 		}
 	}
 
-	return nil, errors.New("book not found")
-}
+	if !found {
+		return nil, errors.New("book not found")
+	}
 
-func (r *JSONBookRepository) Create(book model.Book) (*model.Book, error){
-	//First acquire lock
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	//Second load books
-	books,err := r.loadBooks()
-	if err != nil {
+	if err := r.save(books); err != nil {
 		return nil, err
 	}
-	//Keep track of creation and update times
-	book.CreatedAt = time.Now()
-	book.UpdatedAt = time.Now()
 
-	books= append(books,book)
-	if err := r.saveBooks(books); err != nil {
-		return nil, err
-	}
 	return &book, nil
-
-}
-
-func (r *JSONBookRepository) Update(id string,updatedBook model.Book)(*model.Book, error){
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	//load books
-	books, err := r.loadBooks()
-	if err != nil {
-		return nil, err
-	}
-	for i , book := range books {
-		if book.ID == id {
-			updatedBook.ID = id
-			updatedBook.CreatedAt = book.CreatedAt
-			updatedBook.UpdatedAt = time.Now()
-			books[i] = updatedBook
-
-			if err := r.saveBooks(books); err!=nil{
-				return nil, err
-			}
-			return &books[i],nil
-		} 
-	}
-	return nil, errors.New("book not found")
 }
 
 func (r *JSONBookRepository) Delete(id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	books, err := r.loadBooks()
+	books, err := r.load()
 	if err != nil {
 		return err
 	}
 
-	for i, book := range books {
-		if book.ID == id {
-			//delete element at index 'i' by merging elements before and after it
-			books = append(books[:i], books[i+1:]...)
-			return r.saveBooks(books)
+	index := -1
+	for i, b := range books {
+		if b.ID == id {
+			index = i
+			break
 		}
 	}
 
-	return errors.New("book not found")
+	if index == -1 {
+		return errors.New("book not found")
+	}
+
+	books = append(books[:index], books[index+1:]...)
+	return r.save(books)
 }

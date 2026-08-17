@@ -1,58 +1,30 @@
 package router
 
 import (
-	"log"
 	"net/http"
-	"time"
 
 	"bookstore-api/internal/handler"
+	"bookstore-api/internal/middleware"
 )
 
-// statusRecorder wraps http.ResponseWriter to capture response status codes
-type statusRecorder struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rec *statusRecorder) WriteHeader(code int) {
-	rec.statusCode = code
-	rec.ResponseWriter.WriteHeader(code)
-}
-
-// loggingMiddleware records incoming HTTP request logs and durations
-func loggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-
-		rec := &statusRecorder{
-			ResponseWriter: w,
-			statusCode:     http.StatusOK,
-		}
-
-		next.ServeHTTP(rec, r)
-
-		duration := time.Since(start)
-		log.Printf("[HTTP] %s %s | Status: %d %s | Duration: %v",
-			r.Method,
-			r.URL.Path,
-			rec.statusCode,
-			http.StatusText(rec.statusCode),
-			duration,
-		)
-	})
-}
-
-// NewRouter registers all application routes with Carl (handler) and attaches middleware
-func NewRouter(h *handler.BookHandler) http.Handler {
+// NewRouter constructs and configures the core HTTP ServeMux routing table
+func NewRouter(bookHandler *handler.BookHandler, authHandler *handler.AuthHandler) *http.ServeMux {
 	mux := http.NewServeMux()
 
-	// Register endpoints to Carl's handler methods
-	mux.HandleFunc("GET /books", h.GetAllBooks)
-	mux.HandleFunc("GET /books/{id}", h.GetBookByID)
-	mux.HandleFunc("POST /books", h.CreateBook)
-	mux.HandleFunc("PUT /books/{id}", h.UpdateBook)
-	mux.HandleFunc("DELETE /books/{id}", h.DeleteBook)
+	// Public Auth Endpoints
+	mux.HandleFunc("POST /auth/register", authHandler.Register)
+	mux.HandleFunc("POST /auth/login", authHandler.Login)
 
-	// Wrap entire mux with logging middleware
-	return loggingMiddleware(mux)
+	// Public Book Read Endpoints
+	mux.HandleFunc("GET /books", bookHandler.GetAllBooks)
+	mux.HandleFunc("GET /books/{id}", bookHandler.GetBookByID)
+
+	// Protected Book Write Endpoints (Requires JWT)
+	mux.HandleFunc("POST /books", middleware.AuthMiddleware(bookHandler.CreateBook))
+	mux.HandleFunc("PUT /books/{id}", middleware.AuthMiddleware(bookHandler.UpdateBook))
+
+	// Admin-Only Book Delete Endpoint (Requires JWT + Admin Role)
+	mux.HandleFunc("DELETE /books/{id}", middleware.RequireRole("admin", bookHandler.DeleteBook))
+
+	return mux
 }

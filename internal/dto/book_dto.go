@@ -9,7 +9,7 @@ import (
 	"bookstore-api/internal/model"
 )
 
-// CreateBookRequest defines the strictly allowed fields for POST /books
+// CreateBookRequest defines the strictly allowed payload for POST /books
 type CreateBookRequest struct {
 	Title  string  `json:"title"`
 	Author string  `json:"author"`
@@ -39,7 +39,7 @@ func (r *CreateBookRequest) ToDomain() *model.Book {
 	}
 }
 
-// UpdateBookRequest defines the strictly allowed fields for PUT /books/{id}
+// UpdateBookRequest defines the strictly allowed payload for PUT /books/{id}
 type UpdateBookRequest struct {
 	Title  string  `json:"title"`
 	Author string  `json:"author"`
@@ -68,7 +68,7 @@ func (r *UpdateBookRequest) ToDomain(id string) *model.Book {
 	}
 }
 
-// BookResponse controls the outgoing payload structure sent back to clients
+// BookResponse controls the outgoing JSON payload sent back to clients
 type BookResponse struct {
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`
