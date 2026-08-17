@@ -2,9 +2,12 @@ package handler
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
+	"strconv"
 
 	"bookstore-api/internal/dto"
+	"bookstore-api/internal/model"
 	"bookstore-api/internal/service"
 )
 
@@ -16,20 +19,51 @@ func NewBookHandler(service service.BookService) *BookHandler {
 	return &BookHandler{service: service}
 }
 
+// respondJSON writes pretty-printed JSON responses with appropriate HTTP headers
+func respondJSON(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+
+	if data != nil {
+		encoder := json.NewEncoder(w)
+		encoder.SetIndent("", "  ")
+		_ = encoder.Encode(data)
+	}
+}
+
 func (h *BookHandler) GetAllBooks(w http.ResponseWriter, r *http.Request) {
-	books, err := h.service.GetAll()
+	pageStr := r.URL.Query().Get("page")
+	limitStr := r.URL.Query().Get("limit")
+
+	page, _ := strconv.Atoi(pageStr)
+	limit, _ := strconv.Atoi(limitStr)
+
+	books, totalItems, err := h.service.GetAll(page, limit)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"error":"Failed to retrieve books"}`))
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to retrieve books"})
 		return
 	}
 
-	response := dto.NewBookResponseList(books)
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	totalPages := int(math.Ceil(float64(totalItems) / float64(limit)))
+
+	response := dto.PaginatedBookResponse{
+		Data: dto.NewBookResponseList(books),
+		Meta: dto.PaginationMeta{
+			CurrentPage: page,
+			PageSize:    limit,
+			TotalItems:  totalItems,
+			TotalPages:  totalPages,
+		},
+	}
+
+	respondJSON(w, http.StatusOK, response)
 }
 
 func (h *BookHandler) GetBookByID(w http.ResponseWriter, r *http.Request) {
@@ -37,49 +71,76 @@ func (h *BookHandler) GetBookByID(w http.ResponseWriter, r *http.Request) {
 
 	book, err := h.service.GetByID(id)
 	if err != nil || book == nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(`{"error":"Book not found"}`))
+		status := http.StatusNotFound
+		if err != nil && err.Error() == "invalid UUID format" {
+			status = http.StatusBadRequest
+		}
+		errMsg := "book not found"
+		if err != nil {
+			errMsg = err.Error()
+		}
+		respondJSON(w, status, map[string]string{"error": errMsg})
 		return
 	}
 
-	response := dto.NewBookResponse(book)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	respondJSON(w, http.StatusOK, dto.NewBookResponse(book))
 }
 
 func (h *BookHandler) CreateBook(w http.ResponseWriter, r *http.Request) {
 	var req dto.CreateBookRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"error":"Invalid JSON payload"}`))
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid JSON payload"})
 		return
 	}
 
 	if err := req.Validate(); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
 	createdBook, err := h.service.Create(*req.ToDomain())
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		status := http.StatusBadRequest
+		if err.Error() == "a book with the same title and author already exists" {
+			status = http.StatusConflict
+		}
+		respondJSON(w, status, map[string]string{"error": err.Error()})
 		return
 	}
 
-	response := dto.NewBookResponse(createdBook)
+	respondJSON(w, http.StatusCreated, dto.NewBookResponse(createdBook))
+}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(response)
+func (h *BookHandler) CreateBatchBooks(w http.ResponseWriter, r *http.Request) {
+	var req dto.CreateBatchBookRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid JSON payload"})
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	domainBooks := make([]model.Book, len(req.Books))
+	for i, bReq := range req.Books {
+		domainBooks[i] = *bReq.ToDomain()
+	}
+
+	createdBooks, err := h.service.CreateBatch(domainBooks)
+	if err != nil {
+		status := http.StatusBadRequest
+		if err.Error() == "a book with the same title and author already exists" {
+			status = http.StatusConflict
+		}
+		respondJSON(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, dto.NewBookResponseList(createdBooks))
 }
 
 func (h *BookHandler) UpdateBook(w http.ResponseWriter, r *http.Request) {
@@ -87,47 +148,68 @@ func (h *BookHandler) UpdateBook(w http.ResponseWriter, r *http.Request) {
 
 	var req dto.UpdateBookRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"error":"Invalid JSON payload"}`))
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid JSON payload"})
 		return
 	}
 
 	if err := req.Validate(); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
 	updatedBook, err := h.service.Update(id, *req.ToDomain(id))
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		if err.Error() == "book not found" {
-			w.WriteHeader(http.StatusNotFound)
-		} else {
-			w.WriteHeader(http.StatusBadRequest)
+		status := http.StatusBadRequest
+		if err.Error() == "precondition failed: resource has been modified by another process" {
+			status = http.StatusPreconditionFailed
+		} else if err.Error() == "book not found" {
+			status = http.StatusNotFound
+		} else if err.Error() == "invalid UUID format" {
+			status = http.StatusBadRequest
 		}
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		respondJSON(w, status, map[string]string{"error": err.Error()})
 		return
 	}
 
-	response := dto.NewBookResponse(updatedBook)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	respondJSON(w, http.StatusOK, dto.NewBookResponse(updatedBook))
 }
 
 func (h *BookHandler) DeleteBook(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if err := h.service.Delete(id); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(`{"error":"Book not found"}`))
+		status := http.StatusNotFound
+		if err.Error() == "invalid UUID format" {
+			status = http.StatusBadRequest
+		}
+		respondJSON(w, status, map[string]string{"error": err.Error()})
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	respondJSON(w, http.StatusNoContent, nil)
+}
+
+func (h *BookHandler) DeleteBatchBooks(w http.ResponseWriter, r *http.Request) {
+	var req dto.DeleteBatchBookRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid JSON payload"})
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	if err := h.service.DeleteBatch(req.IDs); err != nil {
+		status := http.StatusBadRequest
+		if err.Error() == "book not found" {
+			status = http.StatusNotFound
+		}
+		respondJSON(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+
+	respondJSON(w, http.StatusNoContent, nil)
 }

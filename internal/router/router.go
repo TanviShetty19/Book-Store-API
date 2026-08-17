@@ -7,7 +7,6 @@ import (
 	"bookstore-api/internal/middleware"
 )
 
-// NewRouter constructs and configures the core HTTP ServeMux routing table
 func NewRouter(bookHandler *handler.BookHandler, authHandler *handler.AuthHandler) *http.ServeMux {
 	mux := http.NewServeMux()
 
@@ -15,15 +14,19 @@ func NewRouter(bookHandler *handler.BookHandler, authHandler *handler.AuthHandle
 	mux.HandleFunc("POST /auth/register", authHandler.Register)
 	mux.HandleFunc("POST /auth/login", authHandler.Login)
 
-	// Public Book Read Endpoints
+	// Public Read Endpoints
 	mux.HandleFunc("GET /books", bookHandler.GetAllBooks)
 	mux.HandleFunc("GET /books/{id}", bookHandler.GetBookByID)
 
-	// Protected Book Write Endpoints (Requires JWT)
+	// Protected Batch Endpoints
+	mux.HandleFunc("POST /books/batch", middleware.AuthMiddleware(bookHandler.CreateBatchBooks))
+	mux.HandleFunc("DELETE /books/batch", middleware.RequireRole("admin", bookHandler.DeleteBatchBooks))
+
+	// Protected Single Book Write Endpoints (Requires JWT)
 	mux.HandleFunc("POST /books", middleware.AuthMiddleware(bookHandler.CreateBook))
 	mux.HandleFunc("PUT /books/{id}", middleware.AuthMiddleware(bookHandler.UpdateBook))
 
-	// Admin-Only Book Delete Endpoint (Requires JWT + Admin Role)
+	// Admin-Only Single Book Delete Endpoint (Requires JWT + Admin Role)
 	mux.HandleFunc("DELETE /books/{id}", middleware.RequireRole("admin", bookHandler.DeleteBook))
 
 	return mux
