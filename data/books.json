@@ -1,1 +1,18 @@
-[]
+[
+  {
+    "id": "69297eb6-9b5f-4bfa-8cf2-80b8b6e252b9",
+    "title": "Designing Data-Intensive Applications",
+    "author": "Martin Kleppmann",
+    "price": 45,
+    "created_at": "2026-08-17T12:18:29.108072+05:30",
+    "updated_at": "2026-08-17T12:18:29.108072+05:30"
+  },
+  {
+    "id": "4da5801e-d3ec-473c-97a6-8b3c51a55c59",
+    "title": "The Pragmatic Programmer",
+    "author": "Andrew Hunt \u0026 David Thomas",
+    "price": 42.5,
+    "created_at": "2026-08-17T12:26:10.948595+05:30",
+    "updated_at": "2026-08-17T12:26:10.948595+05:30"
+  }
+]

@@ -14,7 +14,7 @@ import (
 
 func main() {
 	// 1. Initialize Repositories (Data Access Layer)
-	bookRepo := repository.NewJSONBookRepository("books.json")
+	bookRepo := repository.NewJSONBookRepository("data/books.json")
 	userRepo := repository.NewMemoryUserRepository()
 
 	// 2. Initialize Services (Business Logic Layer)
