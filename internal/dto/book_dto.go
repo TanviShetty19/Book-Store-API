@@ -109,6 +109,7 @@ type BookResponse struct {
 	Author    string    `json:"author"`
 	Price     float64   `json:"price"`
 	Formatted string    `json:"formatted_price"`
+	Version   int       `json:"version"` 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -121,6 +122,7 @@ func NewBookResponse(b *model.Book) *BookResponse {
 		Author:    b.Author,
 		Price:     b.Price,
 		Formatted: fmt.Sprintf("$%.2f", b.Price),
+		Version:   b.Version, 
 		CreatedAt: b.CreatedAt,
 		UpdatedAt: b.UpdatedAt,
 	}

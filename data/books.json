@@ -1,56 +1,47 @@
 [
   {
-    "id": "69297eb6-9b5f-4bfa-8cf2-80b8b6e252b9",
+    "id": "0cfcab47-98e7-417c-a318-00a8a168f5c2",
+    "title": "Clean Code",
+    "author": "Robert C. Martin",
+    "price": 35,
+    "version": 1,
+    "created_at": "2026-08-18T15:12:41.824014+05:30",
+    "updated_at": "2026-08-18T15:12:41.824014+05:30"
+  },
+  {
+    "id": "e343281a-c809-4115-8381-fe96aaec817c",
+    "title": "The Pragmatic Programmer",
+    "author": "Andrew Hunt",
+    "price": 42.5,
+    "version": 1,
+    "created_at": "2026-08-18T15:12:57.108987+05:30",
+    "updated_at": "2026-08-18T15:12:57.108987+05:30"
+  },
+  {
+    "id": "35f8b9e3-4479-4b2f-9fdb-b7278a243693",
     "title": "Designing Data-Intensive Applications",
     "author": "Martin Kleppmann",
-    "price": 45,
-    "version": 0,
-    "created_at": "2026-08-17T12:18:29.108072+05:30",
-    "updated_at": "2026-08-17T12:18:29.108072+05:30"
-  },
-  {
-    "id": "4da5801e-d3ec-473c-97a6-8b3c51a55c59",
-    "title": "The Pragmatic Programmer",
-    "author": "Andrew Hunt \u0026 David Thomas",
-    "price": 42.5,
-    "version": 0,
-    "created_at": "2026-08-17T12:26:10.948595+05:30",
-    "updated_at": "2026-08-17T12:26:10.948595+05:30"
-  },
-  {
-    "id": "88b54705-2637-4e43-87ce-79cc09814e80",
-    "title": "Go in Action",
-    "author": "William Kennedy",
-    "price": 45,
+    "price": 49.99,
     "version": 1,
-    "created_at": "2026-08-17T13:53:15.519078+05:30",
-    "updated_at": "2026-08-17T15:40:01.079903+05:30"
+    "created_at": "2026-08-18T15:13:27.669984+05:30",
+    "updated_at": "2026-08-18T15:13:27.669984+05:30"
   },
   {
-    "id": "49679051-38ed-40d3-b4ee-abfd05a89ef5",
-    "title": "Go in Action 2",
-    "author": "William Kennedy",
-    "price": 39.99,
+    "id": "d80ebb4e-5bdd-4b49-976e-cf75d1270ccd",
+    "title": "Refactoring",
+    "author": "Martin Fowler",
+    "price": 47,
     "version": 1,
-    "created_at": "2026-08-17T15:35:12.398085+05:30",
-    "updated_at": "2026-08-17T15:35:12.398085+05:30"
+    "created_at": "2026-08-18T15:13:35.894483+05:30",
+    "updated_at": "2026-08-18T15:13:35.894483+05:30"
   },
   {
-    "id": "1e74ff18-eb41-4b75-8592-cdf9cdcc590b",
-    "title": "Concurrency in Go 2",
-    "author": "Katherine Cox-Buday",
-    "price": 44.99,
+    "id": "5a845eb2-9155-4ea3-a372-20bf19d454e6",
+    "title": "Head First Design Patterns",
+    "author": "Eric Freeman",
+    "price": 38,
     "version": 1,
-    "created_at": "2026-08-17T15:36:15.843312+05:30",
-    "updated_at": "2026-08-17T15:36:15.843312+05:30"
-  },
-  {
-    "id": "e3e2d321-b5a0-4ac1-9d48-c5f418da2067",
-    "title": "The Go Programming Language 2",
-    "author": "Alan A. A. Donovan",
-    "price": 38.5,
-    "version": 1,
-    "created_at": "2026-08-17T15:36:15.843761+05:30",
-    "updated_at": "2026-08-17T15:36:15.843761+05:30"
+    "created_at": "2026-08-18T15:13:45.027704+05:30",
+    "updated_at": "2026-08-18T15:13:45.027704+05:30"
   }
 ]

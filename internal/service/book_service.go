@@ -80,6 +80,9 @@ func (s *bookService) GetByID(id string) (*model.Book, error) {
 	if book.DeletedAt != nil {
 		return nil, errors.New("book not found")
 	}
+	if book.Version == 0 {
+		book.Version = 1
+	}
 
 	return book, nil
 }
