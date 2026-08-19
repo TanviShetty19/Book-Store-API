@@ -46,12 +46,15 @@ func (s *authService) Register(req dto.RegisterRequest) (*dto.AuthResponse, erro
 	}
 
 	if err := s.userRepo.Create(user); err != nil {
-		return nil, err
+		if err.Error() == "user with this email already exists" {
+			return nil, err
+		}
+		return nil, errors.New("internal server error")
 	}
 
 	token, err := auth.GenerateToken(user.ID, user.Role)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("internal server error")
 	}
 
 	return &dto.AuthResponse{Token: token, Type: "Bearer"}, nil

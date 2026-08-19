@@ -166,6 +166,8 @@ func (h *BookHandler) UpdateBook(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusNotFound
 		} else if err.Error() == "invalid UUID format" {
 			status = http.StatusBadRequest
+		} else if err.Error() == "another book with the same title and author already exists" {
+			status = http.StatusConflict
 		}
 		respondJSON(w, status, map[string]string{"error": err.Error()})
 		return
