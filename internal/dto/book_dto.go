@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"github.com/google/uuid" // Add this line
+
+	"github.com/google/uuid"
+
 	"bookstore-api/internal/model"
 )
 
@@ -15,6 +17,7 @@ type CreateBookRequest struct {
 	Author string  `json:"author"`
 	Price  float64 `json:"price"`
 }
+
 // PaginationMeta holds metadata for paginated query responses
 type PaginationMeta struct {
 	CurrentPage int `json:"current_page"`
@@ -28,6 +31,7 @@ type PaginatedBookResponse struct {
 	Data []*BookResponse `json:"data"`
 	Meta PaginationMeta  `json:"meta"`
 }
+
 // Validate checks structural input rules at the HTTP boundary
 func (r *CreateBookRequest) Validate() error {
 	trimmedTitle := strings.TrimSpace(r.Title) // [NEW EDGE CASE] Clean leading/trailing spaces
@@ -64,9 +68,10 @@ func (r *CreateBookRequest) ToDomain() *model.Book {
 
 // UpdateBookRequest defines the strictly allowed payload for PUT /books/{id}
 type UpdateBookRequest struct {
-	Title  string  `json:"title"`
-	Author string  `json:"author"`
-	Price  float64 `json:"price"`
+	Title   string  `json:"title"`
+	Author  string  `json:"author"`
+	Price   float64 `json:"price"`
+	Version int     `json:"version"` // [ADDED] Client must supply current version for Optimistic Locking
 }
 
 func (r *UpdateBookRequest) Validate() error {
@@ -90,15 +95,20 @@ func (r *UpdateBookRequest) Validate() error {
 		return errors.New("price must be between 0.01 and 10000.00")
 	}
 
+	if r.Version <= 0 { // [ADDED] Require explicit version number for update requests
+		return errors.New("version must be a positive integer")
+	}
+
 	return nil
 }
 
 func (r *UpdateBookRequest) ToDomain(id string) *model.Book {
 	return &model.Book{
-		ID:     id,
-		Title:  strings.TrimSpace(r.Title),
-		Author: strings.TrimSpace(r.Author),
-		Price:  r.Price,
+		ID:      id,
+		Title:   strings.TrimSpace(r.Title),
+		Author:  strings.TrimSpace(r.Author),
+		Price:   r.Price,
+		Version: r.Version, // [ADDED] Map version to domain object
 	}
 }
 
@@ -109,7 +119,7 @@ type BookResponse struct {
 	Author    string    `json:"author"`
 	Price     float64   `json:"price"`
 	Formatted string    `json:"formatted_price"`
-	Version   int       `json:"version"` 
+	Version   int       `json:"version"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -122,7 +132,7 @@ func NewBookResponse(b *model.Book) *BookResponse {
 		Author:    b.Author,
 		Price:     b.Price,
 		Formatted: fmt.Sprintf("$%.2f", b.Price),
-		Version:   b.Version, 
+		Version:   b.Version,
 		CreatedAt: b.CreatedAt,
 		UpdatedAt: b.UpdatedAt,
 	}
