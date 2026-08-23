@@ -1,9 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"time"
 
 	"bookstore-api/internal/handler"
 	"bookstore-api/internal/middleware"
@@ -13,30 +14,68 @@ import (
 )
 
 func main() {
-	// 1. Initialize Repositories (Data Access Layer)
-	bookRepo := repository.NewJSONBookRepository("data/books.json")
-	userRepo := repository.NewMemoryUserRepository()
+	// 1. Enforce strict JWT secret requirement (No insecure default fallbacks)
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET environment variable is required; server refusing to start without it")
+	}
 
-	// 2. Initialize Services (Business Logic Layer)
+	// 2. Initialize Repositories (Passing shared bookRepo to OrderRepo)
+	bookRepo, err := repository.NewJsonBookRepository("data/books.json")
+	if err != nil {
+		log.Fatalf("Failed to initialize book repository: %v", err)
+	}
+
+	userRepo, err := repository.NewJsonUserRepository("data/users.json")
+	if err != nil {
+		log.Fatalf("Failed to initialize user repository: %v", err)
+	}
+
+	orderRepo, err := repository.NewJsonOrderRepository("data/orders.json", bookRepo)
+	if err != nil {
+		log.Fatalf("Failed to initialize order repository: %v", err)
+	}
+
+	// 3. Initialize Services
+	authService := service.NewAuthService(userRepo, jwtSecret)
+	userService := service.NewUserService(userRepo)
 	bookService := service.NewBookService(bookRepo)
-	authService := service.NewAuthService(userRepo)
+	orderService := service.NewOrderService(orderRepo, bookRepo)
 
-	// 3. Initialize Handlers (Presentation/HTTP Layer)
-	bookHandler := handler.NewBookHandler(bookService)
+	// 4. Initialize Handlers & Middleware
 	authHandler := handler.NewAuthHandler(authService)
+	userHandler := handler.NewUserHandler(userService)
+	bookHandler := handler.NewBookHandler(bookService)
+	orderHandler := handler.NewOrderHandler(orderService)
+	authMW := middleware.NewAuthMiddleware(jwtSecret)
 
-	// 4. Initialize Base Router
-	appRouter := router.NewRouter(bookHandler, authHandler)
+	// 5. Setup Router
+	r := router.SetupRoutes(router.RouterConfig{
+		AuthHandler:  authHandler,
+		UserHandler:  userHandler,
+		BookHandler:  bookHandler,
+		OrderHandler: orderHandler,
+		AuthMW:       authMW,
+	})
 
-	// 5. Build Global Middleware Pipeline
-	// Execution Flow: Recovery (Outermost) -> Logging -> CORS -> Router (Innermost)
-	pipeline := middleware.Chain(
-		appRouter,
-		middleware.RecoveryMiddleware,
+	// 6. Wrap router in global Middleware Pipeline (Logging, Panic Recovery, CORS)
+	httpHandler := middleware.Chain(
+		r,
 		middleware.LoggingMiddleware,
+		middleware.RecoveryMiddleware,
 		middleware.CORSMiddleware,
 	)
 
-	fmt.Println("Bookstore API server running on http://localhost:8080...")
-	log.Fatal(http.ListenAndServe(":8080", pipeline))
+	// 7. Configure and Start HTTP Server
+	server := &http.Server{
+		Addr:         ":8080",
+		Handler:      httpHandler,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+
+	log.Println("Server running on http://localhost:8080")
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("Server stopped unexpectedly: %v", err)
+	}
 }

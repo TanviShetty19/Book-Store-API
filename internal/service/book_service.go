@@ -1,193 +1,147 @@
 package service
 
 import (
-	"errors"
+	"context"
+	"fmt"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-
+	"bookstore-api/internal/apperrors"
+	"bookstore-api/internal/dto"
 	"bookstore-api/internal/model"
 	"bookstore-api/internal/repository"
+
+	"github.com/google/uuid"
 )
 
 type BookService interface {
-	GetAll(page, limit int) ([]model.Book, int, error) // [NEW] Pagination signature update
-	GetByID(id string) (*model.Book, error)
-	Create(book model.Book) (*model.Book, error)
-	Update(id string, book model.Book) (*model.Book, error)
-	Delete(id string) error
-	// Batch Operations
-	CreateBatch(books []model.Book) ([]model.Book, error)
-	DeleteBatch(ids []string) error
+	CreateBook(ctx context.Context, req dto.CreateBookRequestDTO) (*dto.BookResponseDTO, error)
+	GetBookByID(ctx context.Context, id string) (*dto.BookResponseDTO, error)
+	GetAllBooks(ctx context.Context) ([]*dto.BookResponseDTO, error)
+	UpdateBook(ctx context.Context, id string, req dto.UpdateBookRequestDTO) (*dto.BookResponseDTO, error)
+	DeleteBook(ctx context.Context, id string) error
 }
 
-type bookService struct {
-	repo repository.BookRepository
+type bookServiceImpl struct {
+	bookRepo repository.BookRepository
 }
 
-func NewBookService(repo repository.BookRepository) BookService {
-	return &bookService{repo: repo}
+func NewBookService(bookRepo repository.BookRepository) BookService {
+	return &bookServiceImpl{bookRepo: bookRepo}
 }
 
-func (s *bookService) GetAll(page, limit int) ([]model.Book, int, error) {
-	// [NEW] Defaults and safety bounds for unbounded queries
-	if page < 1 {
-		page = 1
+func (s *bookServiceImpl) CreateBook(ctx context.Context, req dto.CreateBookRequestDTO) (*dto.BookResponseDTO, error) {
+	if req.Stock < 0 {
+		return nil, fmt.Errorf("%w: stock cannot be negative", apperrors.ErrValidation)
 	}
-	if limit < 1 || limit > 100 {
-		limit = 20
+	if req.Price <= 0 {
+		return nil, fmt.Errorf("%w: price must be greater than zero", apperrors.ErrValidation)
 	}
 
-	allBooks, err := s.repo.GetAll()
+	existingBooks, err := s.bookRepo.GetAll(ctx)
+	if err == nil {
+		for _, b := range existingBooks {
+			if strings.EqualFold(strings.TrimSpace(b.Title), strings.TrimSpace(req.Title)) &&
+				strings.EqualFold(strings.TrimSpace(b.Author), strings.TrimSpace(req.Author)) {
+				return nil, fmt.Errorf("%w: a book with title '%s' by author '%s' already exists", apperrors.ErrConflict, req.Title, req.Author)
+			}
+		}
+	}
+
+	book := &model.Book{
+		ID:        uuid.New().String(),
+		Title:     strings.TrimSpace(req.Title),
+		Author:    strings.TrimSpace(req.Author),
+		Price:     req.Price,
+		Stock:     req.Stock,
+		Version:   1,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	if err := s.bookRepo.Create(ctx, book); err != nil {
+		return nil, err
+	}
+
+	return mapBookToDTO(book), nil
+}
+
+func (s *bookServiceImpl) GetBookByID(ctx context.Context, id string) (*dto.BookResponseDTO, error) {
+	book, err := s.bookRepo.GetByID(ctx, id)
 	if err != nil {
-		return nil, 0, err
+		return nil, fmt.Errorf("%w: book not found", apperrors.ErrNotFound)
+	}
+	return mapBookToDTO(book), nil
+}
+
+func (s *bookServiceImpl) GetAllBooks(ctx context.Context) ([]*dto.BookResponseDTO, error) {
+	books, err := s.bookRepo.GetAll(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	// [NEW] Soft Delete Filter: Exclude records where DeletedAt != nil
-	var activeBooks []model.Book
-	for _, b := range allBooks {
-		if b.DeletedAt == nil {
-			activeBooks = append(activeBooks, b)
+	var dtos []*dto.BookResponseDTO
+	for _, book := range books {
+		dtos = append(dtos, mapBookToDTO(book))
+	}
+	return dtos, nil
+}
+
+func (s *bookServiceImpl) UpdateBook(ctx context.Context, id string, req dto.UpdateBookRequestDTO) (*dto.BookResponseDTO, error) {
+	book, err := s.bookRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("%w: book not found", apperrors.ErrNotFound)
+	}
+
+	if req.Version != nil && *req.Version != book.Version {
+		return nil, fmt.Errorf("%w: book version mismatch (current: %d, provided: %d)", apperrors.ErrConflict, book.Version, *req.Version)
+	}
+
+	if req.Title != nil {
+		book.Title = strings.TrimSpace(*req.Title)
+	}
+	if req.Author != nil {
+		book.Author = strings.TrimSpace(*req.Author)
+	}
+	if req.Price != nil {
+		if *req.Price <= 0 {
+			return nil, fmt.Errorf("%w: price must be greater than zero", apperrors.ErrValidation)
 		}
+		book.Price = *req.Price
 	}
-
-	totalItems := len(activeBooks)
-	startIndex := (page - 1) * limit
-	if startIndex >= totalItems {
-		return []model.Book{}, totalItems, nil
-	}
-
-	endIndex := startIndex + limit
-	if endIndex > totalItems {
-		endIndex = totalItems
-	}
-
-	return activeBooks[startIndex:endIndex], totalItems, nil
-}
-
-func (s *bookService) GetByID(id string) (*model.Book, error) {
-	if _, err := uuid.Parse(id); err != nil {
-		return nil, errors.New("invalid UUID format")
-	}
-
-	book, err := s.repo.GetByID(id)
-	if err != nil || book == nil {
-		return nil, errors.New("book not found")
-	}
-
-	// [NEW] Soft Delete Filter: Rejection check for soft-deleted items
-	if book.DeletedAt != nil {
-		return nil, errors.New("book not found")
-	}
-	if book.Version == 0 {
-		book.Version = 1
-	}
-
-	return book, nil
-}
-
-func (s *bookService) Create(b model.Book) (*model.Book, error) {
-	// [NEW EDGE CASE] Sanitize string inputs prior to business processing
-	b.Title = strings.TrimSpace(b.Title)
-	b.Author = strings.TrimSpace(b.Author)
-
-	// Edge Case 1: Check for duplicate Title + Author
-	existingBooks, err := s.repo.GetAll()
-	if err == nil {
-		for _, existing := range existingBooks {
-			// [NEW] Exclude soft-deleted books when checking duplicates
-			if existing.DeletedAt == nil && strings.EqualFold(existing.Title, b.Title) && strings.EqualFold(existing.Author, b.Author) {
-				return nil, errors.New("a book with the same title and author already exists")
-			}
+	if req.Stock != nil {
+		if *req.Stock < 0 {
+			return nil, fmt.Errorf("%w: stock cannot be negative", apperrors.ErrValidation)
 		}
+		book.Stock = *req.Stock
 	}
 
-	b.ID = uuid.New().String()
-	b.Version = 1 // [NEW] Set initial optimistic locking version
-	now := time.Now()
-	b.CreatedAt = now
-	b.UpdatedAt = now
+	book.Version++
+	book.UpdatedAt = time.Now()
 
-	return s.repo.Create(b)
+	if err := s.bookRepo.Update(ctx, book); err != nil {
+		return nil, err
+	}
+
+	return mapBookToDTO(book), nil
 }
 
-func (s *bookService) Update(id string, b model.Book) (*model.Book, error) {
-	if _, err := uuid.Parse(id); err != nil {
-		return nil, errors.New("invalid UUID format")
+func (s *bookServiceImpl) DeleteBook(ctx context.Context, id string) error {
+	if _, err := s.bookRepo.GetByID(ctx, id); err != nil {
+		return fmt.Errorf("%w: book not found", apperrors.ErrNotFound)
 	}
-
-	b.Title = strings.TrimSpace(b.Title)
-	b.Author = strings.TrimSpace(b.Author)
-
-	existing, err := s.GetByID(id) // GetByID filters out soft-deleted records automatically
-	if err != nil || existing == nil {
-		return nil, errors.New("book not found")
-	}
-
-	// [NEW] Optimistic Locking Check: Compare incoming version against store version
-	if existing.Version != b.Version {
-		return nil, errors.New("precondition failed: resource has been modified by another process")
-	}
-
-	// Edge Case 2: No-Op Update check (skip write if data identical)
-	if existing.Title == b.Title && existing.Author == b.Author && existing.Price == b.Price {
-		return existing, nil
-	}
-
-	existingBooks, err := s.repo.GetAll()
-	if err == nil {
-		for _, other := range existingBooks {
-			if other.DeletedAt == nil && other.ID != id && strings.EqualFold(other.Title, b.Title) && strings.EqualFold(other.Author, b.Author) {
-				return nil, errors.New("another book with the same title and author already exists")
-			}
-		}
-	}
-
-	b.ID = id
-	b.Version = existing.Version + 1 // [NEW] Increment version on valid mutation
-	b.CreatedAt = existing.CreatedAt
-	b.UpdatedAt = time.Now()
-
-	return s.repo.Update(id, b)
+	return s.bookRepo.Delete(ctx, id)
 }
 
-func (s *bookService) Delete(id string) error {
-	if _, err := uuid.Parse(id); err != nil {
-		return errors.New("invalid UUID format")
+func mapBookToDTO(book *model.Book) *dto.BookResponseDTO {
+	return &dto.BookResponseDTO{
+		ID:        book.ID,
+		Title:     book.Title,
+		Author:    book.Author,
+		Price:     book.Price,
+		Stock:     book.Stock,
+		Version:   book.Version,
+		CreatedAt: book.CreatedAt,
+		UpdatedAt: book.UpdatedAt,
 	}
-
-	existing, err := s.GetByID(id)
-	if err != nil || existing == nil {
-		return errors.New("book not found")
-	}
-
-	// [NEW] Soft Delete Action: Set DeletedAt timestamp rather than removing from repository
-	now := time.Now()
-	existing.DeletedAt = &now
-	existing.UpdatedAt = now
-
-	_, err = s.repo.Update(id, *existing)
-	return err
-}
-
-func (s *bookService) CreateBatch(books []model.Book) ([]model.Book, error) {
-	var createdBooks []model.Book
-	for _, b := range books {
-		created, err := s.Create(b)
-		if err != nil {
-			return nil, err // Abort batch on first validation or duplicate error
-		}
-		createdBooks = append(createdBooks, *created)
-	}
-	return createdBooks, nil
-}
-
-func (s *bookService) DeleteBatch(ids []string) error {
-	for _, id := range ids {
-		if err := s.Delete(id); err != nil {
-			return err
-		}
-	}
-	return nil
 }

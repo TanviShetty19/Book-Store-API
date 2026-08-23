@@ -3,16 +3,17 @@ package dto
 import (
 	"errors"
 	"strings"
+	"time"
 )
 
-// RegisterRequest defines the payload for POST /auth/register
-type RegisterRequest struct {
+// RegisterUserRequestDTO defines the payload for POST /users/register
+type RegisterUserRequestDTO struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
-	Role     string `json:"role"` // Optional: defaults to "customer"
+	Role     string `json:"role,omitempty"` // Optional: "ADMIN" or "CUSTOMER"
 }
 
-func (r *RegisterRequest) Validate() error {
+func (r *RegisterUserRequestDTO) Validate() error {
 	if !strings.Contains(r.Email, "@") || strings.TrimSpace(r.Email) == "" {
 		return errors.New("valid email is required")
 	}
@@ -22,21 +23,29 @@ func (r *RegisterRequest) Validate() error {
 	return nil
 }
 
-// LoginRequest defines the payload for POST /auth/login
-type LoginRequest struct {
+// LoginRequestDTO defines the payload for POST /auth/login
+type LoginRequestDTO struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-func (l *LoginRequest) Validate() error {
+func (l *LoginRequestDTO) Validate() error {
 	if strings.TrimSpace(l.Email) == "" || strings.TrimSpace(l.Password) == "" {
 		return errors.New("email and password are required")
 	}
 	return nil
 }
 
-// AuthResponse returns the JWT bearer token payload to the client
-type AuthResponse struct {
-	Token string `json:"token"`
-	Type  string `json:"token_type"`
+// UserResponseDTO returns user profile information without exposing credentials
+type UserResponseDTO struct {
+	ID        string    `json:"id"`
+	Email     string    `json:"email"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// AuthResponseDTO returns the JWT bearer token payload to the client
+type AuthResponseDTO struct {
+	Token     string `json:"token"`
+	TokenType string `json:"token_type"`
 }

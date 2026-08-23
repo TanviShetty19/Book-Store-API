@@ -1,79 +1,59 @@
 package service
 
 import (
-	"errors"
+	"context"
+	"fmt"
 	"time"
 
-	"bookstore-api/internal/auth"
+	"bookstore-api/internal/apperrors"
 	"bookstore-api/internal/dto"
-	"bookstore-api/internal/model"
 	"bookstore-api/internal/repository"
 
-	"github.com/google/uuid"
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthService interface {
-	Register(req dto.RegisterRequest) (*dto.AuthResponse, error)
-	Login(req dto.LoginRequest) (*dto.AuthResponse, error)
+	Login(ctx context.Context, req dto.LoginRequestDTO) (string, error)
 }
 
-type authService struct {
-	userRepo repository.UserRepository
+type authServiceImpl struct {
+	userRepo  repository.UserRepository
+	jwtSecret string
 }
 
-func NewAuthService(userRepo repository.UserRepository) AuthService {
-	return &authService{userRepo: userRepo}
+func NewAuthService(userRepo repository.UserRepository, jwtSecret string) AuthService {
+	return &authServiceImpl{
+		userRepo:  userRepo,
+		jwtSecret: jwtSecret,
+	}
 }
 
-func (s *authService) Register(req dto.RegisterRequest) (*dto.AuthResponse, error) {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+func (s *authServiceImpl) Login(ctx context.Context, req dto.LoginRequestDTO) (string, error) {
+	if err := req.Validate(); err != nil {
+		return "", fmt.Errorf("%w: %v", apperrors.ErrValidation, err)
+	}
+
+	user, err := s.userRepo.GetByEmail(ctx, req.Email)
 	if err != nil {
-		return nil, errors.New("failed to process password")
+		return "", fmt.Errorf("%w: invalid email or password", apperrors.ErrUnauthorized)
 	}
 
-	role := req.Role
-	if role == "" {
-		role = "customer"
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		return "", fmt.Errorf("%w: invalid email or password", apperrors.ErrUnauthorized)
 	}
 
-	user := &model.User{
-		ID:           uuid.New().String(),
-		Email:        req.Email,
-		PasswordHash: string(hashedPassword),
-		Role:         role,
-		CreatedAt:    time.Now(),
+	claims := jwt.MapClaims{
+		"user_id": user.ID,
+		"role":    string(user.Role),
+		"exp":     time.Now().Add(24 * time.Hour).Unix(),
 	}
 
-	if err := s.userRepo.Create(user); err != nil {
-		if err.Error() == "user with this email already exists" {
-			return nil, err
-		}
-		return nil, errors.New("internal server error")
-	}
-
-	token, err := auth.GenerateToken(user.ID, user.Role)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(s.jwtSecret))
 	if err != nil {
-		return nil, errors.New("internal server error")
+		return "", fmt.Errorf("failed to sign token: %w", err)
 	}
 
-	return &dto.AuthResponse{Token: token, Type: "Bearer"}, nil
-}
-
-func (s *authService) Login(req dto.LoginRequest) (*dto.AuthResponse, error) {
-	user, err := s.userRepo.GetByEmail(req.Email)
-	if err != nil {
-		return nil, errors.New("invalid email or password")
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		return nil, errors.New("invalid email or password")
-	}
-
-	token, err := auth.GenerateToken(user.ID, user.Role)
-	if err != nil {
-		return nil, err
-	}
-
-	return &dto.AuthResponse{Token: token, Type: "Bearer"}, nil
+	return tokenString, nil
 }

@@ -5,29 +5,50 @@ import (
 
 	"bookstore-api/internal/handler"
 	"bookstore-api/internal/middleware"
+	"bookstore-api/internal/model"
+
+	"github.com/gorilla/mux"
 )
 
-func NewRouter(bookHandler *handler.BookHandler, authHandler *handler.AuthHandler) *http.ServeMux {
-	mux := http.NewServeMux()
+type RouterConfig struct {
+	AuthHandler  *handler.AuthHandler
+	UserHandler  *handler.UserHandler
+	BookHandler  *handler.BookHandler
+	OrderHandler *handler.OrderHandler
+	AuthMW       *middleware.AuthMiddleware
+}
 
-	// Public Auth Endpoints
-	mux.HandleFunc("POST /auth/register", authHandler.Register)
-	mux.HandleFunc("POST /auth/login", authHandler.Login)
+func SetupRoutes(cfg RouterConfig) *mux.Router {
+	r := mux.NewRouter()
 
-	// Public Read Endpoints
-	mux.HandleFunc("GET /books", bookHandler.GetAllBooks)
-	mux.HandleFunc("GET /books/{id}", bookHandler.GetBookByID)
+	// --- Public Auth Routes ---
+	r.HandleFunc("/auth/login", cfg.AuthHandler.Login).Methods(http.MethodPost)
+	r.HandleFunc("/users/register", cfg.UserHandler.Register).Methods(http.MethodPost)
 
-	// Protected Batch Endpoints
-	mux.HandleFunc("POST /books/batch", middleware.AuthMiddleware(bookHandler.CreateBatchBooks))
-	mux.HandleFunc("DELETE /books/batch", middleware.RequireRole("admin", bookHandler.DeleteBatchBooks))
+	// --- Public Book Browsing ---
+	r.HandleFunc("/books", cfg.BookHandler.GetAllBooks).Methods(http.MethodGet)
+	r.HandleFunc("/books/{id}", cfg.BookHandler.GetBookByID).Methods(http.MethodGet)
 
-	// Protected Single Book Write Endpoints (Requires JWT)
-	mux.HandleFunc("POST /books", middleware.AuthMiddleware(bookHandler.CreateBook))
-	mux.HandleFunc("PUT /books/{id}", middleware.AuthMiddleware(bookHandler.UpdateBook))
+	// --- Protected Routes (Requires JWT Authentication) ---
+	api := r.PathPrefix("").Subrouter()
+	api.Use(cfg.AuthMW.Authenticate)
 
-	// Admin-Only Single Book Delete Endpoint (Requires JWT + Admin Role)
-	mux.HandleFunc("DELETE /books/{id}", middleware.RequireRole("admin", bookHandler.DeleteBook))
+	// User Profile
+	api.HandleFunc("/users/me", cfg.UserHandler.GetProfile).Methods(http.MethodGet)
 
-	return mux
+	// Orders (Customer & Admin)
+	api.HandleFunc("/orders", cfg.OrderHandler.CreateOrder).Methods(http.MethodPost)
+	api.HandleFunc("/orders", cfg.OrderHandler.GetMyOrders).Methods(http.MethodGet)
+	api.HandleFunc("/orders/{id}", cfg.OrderHandler.GetOrderByID).Methods(http.MethodGet)
+
+	// --- Admin-Only Book Operations ---
+	adminBooks := api.PathPrefix("/books").Subrouter()
+	// Matches model.RoleAdmin ("ADMIN")
+	adminBooks.Use(middleware.RequireRole(string(model.RoleAdmin)))
+
+	adminBooks.HandleFunc("", cfg.BookHandler.CreateBook).Methods(http.MethodPost)
+	adminBooks.HandleFunc("/{id}", cfg.BookHandler.UpdateBook).Methods(http.MethodPut, http.MethodPatch)
+	adminBooks.HandleFunc("/{id}", cfg.BookHandler.DeleteBook).Methods(http.MethodDelete)
+
+	return r
 }
