@@ -1,77 +1,32 @@
 [
   {
-    "id": "2b21ae37-f138-48ff-89d1-def6fd8f4f99",
-    "title": "Clean Code",
-    "author": "Robert C. Martin",
-    "price": 35,
-    "version": 1,
-    "created_at": "2026-08-19T08:34:46.022865+05:30",
-    "updated_at": "2026-08-19T08:34:46.022865+05:30"
+    "id": "6721e295-b4e7-4949-bf59-be6633624292",
+    "title": "Go Design Patterns (2nd Ed)",
+    "author": "Erich Gamma",
+    "price": 34.99,
+    "stock": 48,
+    "version": 2,
+    "created_at": "2026-08-24T08:08:30.143458+05:30",
+    "updated_at": "2026-08-24T08:09:31.195987+05:30"
   },
   {
-    "id": "daad470d-6d08-452d-8de3-cab9dc28c10a",
-    "title": "The Pragmatic Programmer",
-    "author": "Andrew Hunt",
-    "price": 42.5,
-    "version": 1,
-    "created_at": "2026-08-19T08:34:52.924389+05:30",
-    "updated_at": "2026-08-19T08:34:52.924389+05:30"
-  },
-  {
-    "id": "c9012c71-9bc8-46d8-a5a0-1b7f9d04c44e",
-    "title": "Designing Data-Intensive Applications",
-    "author": "Martin Kleppmann",
-    "price": 49.99,
-    "version": 1,
-    "created_at": "2026-08-19T08:35:00.106339+05:30",
-    "updated_at": "2026-08-19T08:35:00.106339+05:30"
-  },
-  {
-    "id": "6e354422-0ca7-4a4f-b689-a9c064799b1b",
-    "title": "Refactoring",
-    "author": "Martin Fowler",
-    "price": 47,
-    "version": 1,
-    "created_at": "2026-08-19T08:35:16.663837+05:30",
-    "updated_at": "2026-08-19T08:35:16.663837+05:30"
-  },
-  {
-    "id": "39acfabf-a86f-47cb-a36e-c10c61015415",
-    "title": "Head First Design Patterns",
-    "author": "Eric Freeman",
-    "price": 38,
-    "version": 1,
-    "created_at": "2026-08-19T08:35:24.205016+05:30",
-    "updated_at": "2026-08-19T08:35:24.205016+05:30"
-  },
-  {
-    "id": "ca72fff4-9231-4705-aff6-54c1cf247f55",
-    "title": "Clean Code",
-    "author": "Robert",
+    "id": "0f6ca1fb-8ce1-4989-9709-903c7cfb4eea",
+    "title": "Clean Architecture in Go",
+    "author": "Robert Martin",
     "price": 40,
+    "stock": 0,
     "version": 1,
-    "created_at": "2026-08-19T11:11:44.670153+05:30",
-    "updated_at": "2026-08-19T11:12:56.63507+05:30",
-    "deleted_at": "2026-08-19T11:12:56.63507+05:30"
+    "created_at": "2026-08-24T08:08:39.280475+05:30",
+    "updated_at": "2026-08-24T08:08:39.280475+05:30"
   },
   {
-    "id": "12fd0805-8ebd-478b-8d4f-0f3c60b65f1a",
-    "title": "book1",
+    "id": "fc584142-2385-43c9-a69f-3a1b2f918a08",
+    "title": "Concurrency in Go",
     "author": "Katherine Cox-Buday",
-    "price": 44.99,
+    "price": 35,
+    "stock": 10,
     "version": 1,
-    "created_at": "2026-08-19T11:24:37.845052+05:30",
-    "updated_at": "2026-08-19T11:27:12.418493+05:30",
-    "deleted_at": "2026-08-19T11:27:12.418493+05:30"
-  },
-  {
-    "id": "877d41d9-5ae5-4d39-b7d7-732f7787edb4",
-    "title": "book2",
-    "author": "Alan A. A. Donovan",
-    "price": 38.5,
-    "version": 1,
-    "created_at": "2026-08-19T11:24:37.84552+05:30",
-    "updated_at": "2026-08-19T11:27:12.419029+05:30",
-    "deleted_at": "2026-08-19T11:27:12.419029+05:30"
+    "created_at": "2026-08-24T08:08:46.358659+05:30",
+    "updated_at": "2026-08-24T08:08:46.358659+05:30"
   }
 ]

@@ -26,7 +26,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	response, err := h.userService.Register(r.Context(), req)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, mapErrorToStatusCode(err), err.Error())
 		return
 	}
 
@@ -36,13 +36,13 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 func (h *UserHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(middleware.UserIDKey).(string)
 	if !ok || userID == "" {
-		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized: missing user context")
 		return
 	}
 
 	response, err := h.userService.GetUserByID(r.Context(), userID)
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, err.Error())
+		writeJSONError(w, mapErrorToStatusCode(err), err.Error())
 		return
 	}
 

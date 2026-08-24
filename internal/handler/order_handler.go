@@ -2,8 +2,10 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
+	"bookstore-api/internal/apperrors"
 	"bookstore-api/internal/dto"
 	"bookstore-api/internal/middleware"
 	"bookstore-api/internal/service"
@@ -34,7 +36,8 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	response, err := h.orderService.CreateOrder(r.Context(), userID, req)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		// Dynamically maps ErrConflict -> 409, ErrNotFound -> 404, etc.
+		writeJSONError(w, mapErrorToStatusCode(err), err.Error())
 		return
 	}
 
@@ -50,7 +53,7 @@ func (h *OrderHandler) GetOrderByID(w http.ResponseWriter, r *http.Request) {
 
 	response, err := h.orderService.GetOrderByID(r.Context(), userID, userRole, orderID)
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, err.Error())
+		writeJSONError(w, mapErrorToStatusCode(err), err.Error())
 		return
 	}
 
@@ -66,11 +69,29 @@ func (h *OrderHandler) GetMyOrders(w http.ResponseWriter, r *http.Request) {
 
 	orders, err := h.orderService.GetUserOrders(r.Context(), userID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to fetch orders")
+		writeJSONError(w, mapErrorToStatusCode(err), err.Error())
 		return
 	}
 
 	writeJSONResponse(w, http.StatusOK, orders)
+}
+
+// Helper to inspect apperrors sentinel values and select proper REST status codes
+func mapErrorToStatusCode(err error) int {
+	switch {
+	case errors.Is(err, apperrors.ErrNotFound):
+		return http.StatusNotFound // 404
+	case errors.Is(err, apperrors.ErrConflict):
+		return http.StatusConflict // 409
+	case errors.Is(err, apperrors.ErrForbidden):
+		return http.StatusForbidden // 403
+	case errors.Is(err, apperrors.ErrUnauthorized):
+		return http.StatusUnauthorized // 401
+	case errors.Is(err, apperrors.ErrValidation):
+		return http.StatusBadRequest // 400
+	default:
+		return http.StatusInternalServerError // 500
+	}
 }
 
 // Shared JSON response helpers
@@ -81,5 +102,7 @@ func writeJSONError(w http.ResponseWriter, statusCode int, message string) {
 func writeJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(data)
+	if data != nil {
+		json.NewEncoder(w).Encode(data)
+	}
 }

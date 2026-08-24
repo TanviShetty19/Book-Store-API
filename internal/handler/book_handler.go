@@ -27,7 +27,7 @@ func (h *BookHandler) CreateBook(w http.ResponseWriter, r *http.Request) {
 
 	response, err := h.bookService.CreateBook(r.Context(), req)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, mapErrorToStatusCode(err), err.Error())
 		return
 	}
 
@@ -40,7 +40,7 @@ func (h *BookHandler) GetBookByID(w http.ResponseWriter, r *http.Request) {
 
 	response, err := h.bookService.GetBookByID(r.Context(), bookID)
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, err.Error())
+		writeJSONError(w, mapErrorToStatusCode(err), err.Error())
 		return
 	}
 
@@ -50,7 +50,7 @@ func (h *BookHandler) GetBookByID(w http.ResponseWriter, r *http.Request) {
 func (h *BookHandler) GetAllBooks(w http.ResponseWriter, r *http.Request) {
 	books, err := h.bookService.GetAllBooks(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to fetch books")
+		writeJSONError(w, mapErrorToStatusCode(err), err.Error())
 		return
 	}
 
@@ -69,7 +69,7 @@ func (h *BookHandler) UpdateBook(w http.ResponseWriter, r *http.Request) {
 
 	response, err := h.bookService.UpdateBook(r.Context(), bookID, req)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeJSONError(w, mapErrorToStatusCode(err), err.Error())
 		return
 	}
 
@@ -81,7 +81,7 @@ func (h *BookHandler) DeleteBook(w http.ResponseWriter, r *http.Request) {
 	bookID := vars["id"]
 
 	if err := h.bookService.DeleteBook(r.Context(), bookID); err != nil {
-		writeJSONError(w, http.StatusNotFound, err.Error())
+		writeJSONError(w, mapErrorToStatusCode(err), err.Error())
 		return
 	}
 

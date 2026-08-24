@@ -1,0 +1,16 @@
+[
+  {
+    "id": "9fe94702-c367-434b-a100-9219667ae11b",
+    "email": "customer@example.com",
+    "password": "$2a$10$7jhxdwMqoSre9eX/fPS0r.Yd2iDfy9MCTDK6ZT3ZaG6RMzsqUtH1a",
+    "role": "CUSTOMER",
+    "created_at": "2026-08-24T08:07:49.673773+05:30"
+  },
+  {
+    "id": "fec7cf9e-2338-4b17-ba77-ba9d106eeb3d",
+    "email": "admin@example.com",
+    "password": "$2a$10$6tsLHe0iHhVb7ALcxvH0zOUZqJqcXN0W.ZLCaa.Y5szzrWMKHXZCK",
+    "role": "ADMIN",
+    "created_at": "2026-08-24T08:08:01.170358+05:30"
+  }
+]

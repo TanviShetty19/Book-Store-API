@@ -25,11 +25,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	token, err := h.authService.Login(r.Context(), req)
 	if err != nil {
-		writeJSONError(w, http.StatusUnauthorized, err.Error())
+		writeJSONError(w, mapErrorToStatusCode(err), err.Error())
 		return
 	}
 
-	writeJSONResponse(w, http.StatusOK, map[string]string{
-		"token": token,
+	writeJSONResponse(w, http.StatusOK, dto.AuthResponseDTO{
+		Token:     token,
+		TokenType: "Bearer",
 	})
 }

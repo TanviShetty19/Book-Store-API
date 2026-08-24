@@ -17,7 +17,7 @@ const (
 type User struct {
 	ID        string    `json:"id"`
 	Email     string    `json:"email"`
-	Password  string    `json:"-"` // Omit from JSON responses for security
+	Password  string    `json:"password"`
 	Role      UserRole  `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
 }

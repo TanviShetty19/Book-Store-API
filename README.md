@@ -1,7 +1,3 @@
-Here is the updated, comprehensive **`README.md`** that merges your existing documentation with all the new features, architecture decisions, and edge-case handling we worked through (including order management, global middleware panic recovery, environment variable safeguards, and multi-phase stock deduction mechanics).
-
----
-
 ```markdown
 # Bookstore REST API
 
@@ -57,7 +53,7 @@ The application strictly separates concerns into decoupled layers using Go inter
 │  • books.json: Catalog with versioning & soft-delete        │
 │  • users.json: Account identities & hashed credentials      │
 │  • orders.json: Order transactions & item snapshots         │
-└─────────────────────────────────────────────────────────────┘
+└──────────────────────────┴──────────────────────────────────┘
 
 ```
 
@@ -72,7 +68,7 @@ The application strictly separates concerns into decoupled layers using Go inter
 * **Strict Startup Safeguards:** Fail-fast server initialization refusing execution without a configured `JWT_SECRET` environment variable.
 * **RESTful CRUD Operations:** Full resource management for users, catalog books, and customer orders.
 * **JWT Authentication & RBAC:** Centralized token verification delegating to `auth.ValidateToken()` with role enforcement (`ADMIN` vs. `CUSTOMER`).
-* **Optimistic Concurrency Control:** Version-based locking (`Version *int`) to prevent lost update collisions on concurrent writes.
+* **Optimistic Concurrency Control:** Version-based locking (`version` field) to prevent lost update collisions on concurrent writes.
 
 ---
 
@@ -138,7 +134,7 @@ bookstore-api/
 
 
 * **Case-Insensitive Duplicate Prevention**: Utilizes `strings.EqualFold()` to prevent duplicate Book entries (Title + Author) and duplicate user registrations (Email).
-* **Optimistic Locking**: Implements version-based concurrency control on books (`Version *int`). Partial updates (`PUT`/`PATCH`) verify the client's version token matches current storage before incrementing (`version++`).
+* **Optimistic Locking**: Implements version-based concurrency control on books (`Version *int`). Updates (`PUT`) verify the client's version token matches current storage before incrementing (`version++`).
 * **Soft Deletes**: Deletions mark `DeletedAt *time.Time` instead of purging records, retaining historical audit trails while excluding deleted items from read operations.
 * **Security Context Isolation**: Client-submitted order payloads (`CreateOrderRequestDTO`) intentionally exclude unit prices and user IDs. Unit prices are derived server-side from `BookRepository`, and caller identity is extracted from verified JWT claims in context.
 
@@ -148,13 +144,14 @@ bookstore-api/
 
 | Status Code | Scenario | Example |
 | --- | --- | --- |
-| `200 OK` | Successful retrieval or update | GET /books, PUT /books/{id}, POST /auth/login |
-| `201 Created` | Successful resource creation | POST /books, POST /users/register, POST /orders |
-| `400 Bad Request` | Structural validation failure or malformed payload | Invalid JSON, missing required fields, non-UUID path parameters |
+| `200 OK` | Successful retrieval or update | `GET /books`, `PUT /books/{id}`, `POST /auth/login` |
+| `201 Created` | Successful resource creation | `POST /books`, `POST /users/register`, `POST /orders` |
+| `204 No Content` | Successful deletion with no response body | `DELETE /books/{id}` |
+| `400 Bad Request` | Structural validation failure or malformed payload | Invalid JSON syntax, missing required payload fields |
 | `401 Unauthorized` | Invalid or missing authentication | Missing Authorization header, expired or invalid JWT |
 | `403 Forbidden` | Insufficient RBAC privileges or invalid resource ownership | Customer attempting to delete a book or read another user's order |
-| `404 Not Found` | Resource missing or soft-deleted | GET /books/{id} or GET /orders/{id} for non-existent IDs |
-| `409 Conflict` | Business rule conflict or version collision | Duplicate user registration, duplicate book title, optimistic lock version mismatch |
+| `404 Not Found` | Resource missing or soft-deleted | `GET /books/{id}` or `GET /orders/{id}` for non-existent IDs |
+| `409 Conflict` | Business rule conflict or version collision | Duplicate user email, duplicate book title, optimistic lock version mismatch, out of stock |
 | `500 Internal Server Error` | Storage or server error | Intercepted runtime panics, disk I/O failure |
 
 ---
@@ -190,7 +187,14 @@ cd Book-Store-API
 ```
 
 
-2. **Set the mandatory `JWT_SECRET` environment variable:**
+2. **Initialize fresh JSON storage files:**
+```bash
+echo "[]" > data/users.json && echo "[]" > data/books.json && echo "[]" > data/orders.json
+
+```
+
+
+3. **Set the mandatory `JWT_SECRET` environment variable:**
 ```bash
 # Linux / macOS
 export JWT_SECRET="your-super-secret-key-change-in-prod"
@@ -204,16 +208,9 @@ $env:JWT_SECRET="your-super-secret-key-change-in-prod"
 ```
 
 
-3. **Start the API server:**
+4. **Start the API server:**
 ```bash
 go run cmd/api/main.go
-
-```
-
-
-4. **Expected Output:**
-```text
-Server running on http://localhost:8080
 
 ```
 
@@ -232,200 +229,135 @@ Server running on http://localhost:8080
 | `GET` | `/books/{id}` | Retrieve book by ID | No | `200 OK`, `404 Not Found` |
 | `POST` | `/books` | Create a new book record | Admin | `201 Created`, `400 Bad Request`, `403 Forbidden`, `409 Conflict` |
 | `PUT` | `/books/{id}` | Update book with optimistic locking | Admin | `200 OK`, `400 Bad Request`, `403 Forbidden`, `404 Not Found`, `409 Conflict` |
-| `DELETE` | `/books/{id}` | Soft-delete book record | Admin | `200 OK`, `403 Forbidden`, `404 Not Found` |
+| `DELETE` | `/books/{id}` | Soft-delete book record | Admin | `204 No Content`, `403 Forbidden`, `404 Not Found` |
 | `POST` | `/orders` | Create order with stock deduction | Yes | `201 Created`, `400 Bad Request`, `401 Unauthorized`, `409 Conflict` |
 | `GET` | `/orders` | Retrieve authenticated user's orders | Yes | `200 OK`, `401 Unauthorized` |
 | `GET` | `/orders/{id}` | Retrieve order by ID | Yes | `200 OK`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found` |
 
 ---
 
-## Testing with cURL
+## Sequential Test Suite (All cURL Commands)
 
-### 1. Authentication & Users
+Run these commands in order from a second terminal window to execute all operations, edge cases, and verification steps.
 
-**Register a Customer:**
-
-```bash
-curl -i -X POST http://localhost:8080/users/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"customer@example.com","password":"password123","role":"CUSTOMER"}'
-
-```
-
-**Register an Admin:**
+### Phase 1: Registration, Login & Profile Operations
 
 ```bash
-curl -i -X POST http://localhost:8080/users/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com","password":"adminpassword123","role":"ADMIN"}'
+# Register Customer Account (HTTP 201)
+curl -i -X POST http://localhost:8080/users/register -H "Content-Type: application/json" -d '{"email":"customer@example.com","password":"password123","role":"CUSTOMER"}'
 
-```
+# Register Admin Account (HTTP 201)
+curl -i -X POST http://localhost:8080/users/register -H "Content-Type: application/json" -d '{"email":"admin@example.com","password":"adminpassword123","role":"ADMIN"}'
 
-**Login as Admin & Store Token:**
+# Authenticate Customer & Extract Token
+CUSTOMER_TOKEN=$(curl -s -X POST http://localhost:8080/auth/login -H "Content-Type: application/json" -d '{"email":"customer@example.com","password":"password123"}' \vert{} jq -r '.token') && echo "Customer Token: $CUSTOMER_TOKEN"
 
-```bash
-ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com","password":"adminpassword123"}' | jq -r '.token')
+# Authenticate Admin & Extract Token
+ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/auth/login -H "Content-Type: application/json" -d '{"email":"admin@example.com","password":"adminpassword123"}' \vert{} jq -r '.token') && echo "Admin Token: $ADMIN_TOKEN"
 
-```
-
-**Login as Customer & Store Token:**
-
-```bash
-CUSTOMER_TOKEN=$(curl -s -X POST http://localhost:8080/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"customer@example.com","password":"password123"}' | jq -r '.token')
-
-```
-
-**Fetch Current Profile:**
-
-```bash
-curl -i -X GET http://localhost:8080/users/me \
-  -H "Authorization: Bearer $CUSTOMER_TOKEN"
+# Get Authenticated User Profile (HTTP 200)
+curl -i -X GET http://localhost:8080/users/me -H "Authorization: Bearer $CUSTOMER_TOKEN"
 
 ```
 
 ---
 
-### 2. Catalog & Book Operations
-
-**Create a Book (Admin Only):**
+### Phase 2: Catalog Seeding (Single & Batch Shell Execution)
 
 ```bash
-BOOK_ID=$(curl -s -X POST http://localhost:8080/books \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -d '{"title":"Designing Data-Intensive Applications","author":"Martin Kleppmann","price":45.00,"stock":20}' | jq -r '.id')
+# Seed Book 1 (High Stock)
+BOOK_1=$(curl -s -X POST http://localhost:8080/books -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_TOKEN" -d '{"title":"Go Design Patterns","author":"Erich Gamma","price":30.00,"stock":50}' \vert{} jq -r '.id') && echo "Book 1 ID: $BOOK_1"
 
-```
+# Seed Book 2 (Low Stock)
+BOOK_2=$(curl -s -X POST http://localhost:8080/books -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_TOKEN" -d '{"title":"Clean Architecture in Go","author":"Robert Martin","price":40.00,"stock":2}' \vert{} jq -r '.id') && echo "Book 2 ID: $BOOK_2"
 
-**Get All Books:**
+# Batch Creation via Terminal Loop (Adds Book 3 and Book 4)
+for book in '{"title":"Concurrency in Go","author":"Katherine Cox-Buday","price":35.00,"stock":10}' '{"title":"The Go Programming Language","author":"Alan Donovan","price":45.00,"stock":15}'; do curl -s -X POST http://localhost:8080/books -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_TOKEN" -d "$book"; done
 
-```bash
+# Fetch Full Catalog (HTTP 200)
 curl -i -X GET http://localhost:8080/books
 
-```
+# Fetch Single Book by ID (HTTP 200)
+curl -i -X GET http://localhost:8080/books/$BOOK_1
 
-**Get Book by ID:**
-
-```bash
-curl -i -X GET http://localhost:8080/books/$BOOK_ID
-
-```
-
-**Update Book with Optimistic Locking (`version: 1` -> Success):**
-
-```bash
-curl -i -X PUT http://localhost:8080/books/$BOOK_ID \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -d '{"title":"Designing Data-Intensive Applications (2nd Ed)","price":49.99,"version":1}'
-
-```
-
-**Soft-Delete Book (Admin Only):**
-
-```bash
-curl -i -X DELETE http://localhost:8080/books/$BOOK_ID \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
+# Update Book Details (Version 1 -> Version 2) (HTTP 200)
+curl -i -X PUT http://localhost:8080/books/$BOOK_1 -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_TOKEN" -d '{"title":"Go Design Patterns (2nd Ed)","price":34.99,"version":1}'
 
 ```
 
 ---
 
-### 3. Orders & Checkout
-
-**Create an Order (Customer):**
+### Phase 3: Comprehensive Edge Case & Security Validation
 
 ```bash
-ORDER_ID=$(curl -s -X POST http://localhost:8080/orders \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $CUSTOMER_TOKEN" \
-  -d '{
-    "items": [
-      {
-        "book_id": "'"$BOOK_ID"'",
-        "quantity": 2
-      }
-    ]
-  }' | jq -r '.id')
-
-```
-
-**Get My Orders (Customer):**
-
-```bash
-curl -i -X GET http://localhost:8080/orders \
-  -H "Authorization: Bearer $CUSTOMER_TOKEN"
-
-```
-
-**Get Order by ID:**
-
-```bash
-curl -i -X GET http://localhost:8080/orders/$ORDER_ID \
-  -H "Authorization: Bearer $CUSTOMER_TOKEN"
-
-```
-
----
-
-### 4. Edge Case & Failure Testing
-
-**Server Refuses to Start Without `JWT_SECRET`:**
-
-```bash
-unset JWT_SECRET
-go run cmd/api/main.go
+# 1. Server Refuses Startup Without JWT_SECRET
+unset JWT_SECRET && go run cmd/api/main.go
 # Result: Fatal exit - "JWT_SECRET environment variable is required; server refusing to start without it"
 
-```
+# Restore JWT_SECRET for remaining tests
+export JWT_SECRET="your-super-secret-key-change-in-prod"
 
-**Unauthorized Access (401 Unauthorized):**
+# 2. Duplicate Email Registration -> Expect HTTP 409 Conflict
+curl -i -X POST http://localhost:8080/users/register -H "Content-Type: application/json" -d '{"email":"customer@example.com","password":"password123","role":"CUSTOMER"}'
 
-```bash
-curl -i -X GET http://localhost:8080/users/me
+# 3. Invalid Login Credentials -> Expect HTTP 401 Unauthorized
+curl -i -X POST http://localhost:8080/auth/login -H "Content-Type: application/json" -d '{"email":"customer@example.com","password":"wrongpassword"}'
 
-```
+# 4. Non-Admin Creating Book (RBAC Violation) -> Expect HTTP 403 Forbidden
+curl -i -X POST http://localhost:8080/books -H "Content-Type: application/json" -H "Authorization: Bearer $CUSTOMER_TOKEN" -d '{"title":"Forbidden Book","price":10.00,"stock":5}'
 
-**Forbidden Operation (Customer attempting Admin creation -> 403 Forbidden):**
+# 5. Optimistic Concurrency Collision (Stale Version Update) -> Expect HTTP 409 Conflict
+curl -i -X PUT http://localhost:8080/books/$BOOK_1 -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_TOKEN" -d '{"price":20.00,"version":1}'
 
-```bash
-curl -i -X POST http://localhost:8080/books \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $CUSTOMER_TOKEN" \
-  -d '{"title":"Unauthorized Entry","author":"Hacker","price":10.00,"stock":5}'
+# 6. Multi-Item Order Transaction Failure (Book 2 stock exceeded) -> Expect HTTP 409 Conflict
+curl -i -X POST http://localhost:8080/orders -H "Content-Type: application/json" -H "Authorization: Bearer $CUSTOMER_TOKEN" -d '{"items":[{"book_id":"'"$BOOK_1"'","quantity":2},{"book_id":"'"$BOOK_2"'","quantity":10}]}'
 
-```
+# 7. Verify Transaction Atomic Rollback (Book 1 stock must remain untouched at 50)
+curl -s http://localhost:8080/books/$BOOK_1 | jq -r '.stock'
 
-**Duplicate User Registration (409 Conflict):**
-
-```bash
-curl -i -X POST http://localhost:8080/users/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"customer@example.com","password":"password123"}'
+# 8. Order Non-Existent Book -> Expect HTTP 404 Not Found
+curl -i -X POST http://localhost:8080/orders -H "Content-Type: application/json" -H "Authorization: Bearer $CUSTOMER_TOKEN" -d '{"items":[{"book_id":"00000000-0000-0000-0000-000000000000","quantity":1}]}'
 
 ```
 
-**Optimistic Concurrency Control Collision (Stale Version -> 409 Conflict):**
+---
+
+### Phase 4: Order Execution & Inventory Management
 
 ```bash
-curl -i -X PUT http://localhost:8080/books/$BOOK_ID \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -d '{"price":29.99,"version":1}'
+# Valid Multi-Item Order Execution (Deducts stock for Book 1 and Book 2) -> Expect HTTP 201 Created
+ORDER_ID=$(curl -s -X POST http://localhost:8080/orders -H "Content-Type: application/json" -H "Authorization: Bearer $CUSTOMER_TOKEN" -d '{"items":[{"book_id":"'"$BOOK_1"'","quantity":2},{"book_id":"'"$BOOK_2"'","quantity":2}]}' \vert{} jq -r '.id') && echo "Order ID: $ORDER_ID"
+
+# Verify Automatic Inventory Deduction (Book 2 stock is now 0)
+curl -s http://localhost:8080/books/$BOOK_2 | jq -r '.stock'
+
+# Fetch Customer Orders (HTTP 200)
+curl -i -X GET http://localhost:8080/orders -H "Authorization: Bearer $CUSTOMER_TOKEN"
+
+# Fetch Specific Order Details (HTTP 200)
+curl -i -X GET http://localhost:8080/orders/$ORDER_ID -H "Authorization: Bearer $CUSTOMER_TOKEN"
+
+# Admin Accessing Order Details (Admin Override) -> Expect HTTP 200 OK
+curl -i -X GET http://localhost:8080/orders/$ORDER_ID -H "Authorization: Bearer $ADMIN_TOKEN"
+
+# Order Attempt on Depleted Stock (Book 2 stock is 0) -> Expect HTTP 409 Conflict
+curl -i -X POST http://localhost:8080/orders -H "Content-Type: application/json" -H "Authorization: Bearer $CUSTOMER_TOKEN" -d '{"items":[{"book_id":"'"$BOOK_2"'","quantity":1}]}'
 
 ```
 
-**Insufficient Stock Request (409 Conflict):**
+---
+
+### Phase 5: Deletion & Soft-Delete Catalog Verification
 
 ```bash
-curl -i -X POST http://localhost:8080/orders \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $CUSTOMER_TOKEN" \
-  -d '{"items":[{"book_id":"'"$BOOK_ID"'","quantity":999999}]}'
+# Soft Delete Book (Admin Only) -> Expect HTTP 204 No Content
+curl -i -X DELETE http://localhost:8080/books/$BOOK_1 -H "Authorization: Bearer $ADMIN_TOKEN"
+
+# Query Soft-Deleted Book by ID -> Expect HTTP 404 Not Found
+curl -i -X GET http://localhost:8080/books/$BOOK_1
+
+# Soft Delete Multiple Books via Shell Execution -> Expect HTTP 204 No Content
+for id in $BOOK_2; do curl -i -X DELETE http://localhost:8080/books/$id -H "Authorization: Bearer $ADMIN_TOKEN"; done
 
 ```
 

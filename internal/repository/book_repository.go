@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"ecommerce-api/internal/model"
+	"bookstore-api/internal/model"
 )
 
 type BookRepository interface {
