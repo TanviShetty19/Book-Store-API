@@ -13,13 +13,25 @@ type RegisterUserRequestDTO struct {
 	Role     string `json:"role,omitempty"` // Optional: "ADMIN" or "CUSTOMER"
 }
 
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+
 func (r *RegisterUserRequestDTO) Validate() error {
-	if !strings.Contains(r.Email, "@") || strings.TrimSpace(r.Email) == "" {
-		return errors.New("valid email is required")
+	// 1. Trim surrounding whitespace and lowercase email
+	r.Email = strings.ToLower(strings.TrimSpace(r.Email))
+
+	// 2. Trim whitespace from role
+	r.Role = strings.TrimSpace(r.Role)
+
+	// 3. Validate email presence and regex structure
+	if r.Email == "" || !emailRegex.MatchString(r.Email) {
+		return errors.New("a valid email address is required (e.g., user@example.com)")
 	}
-	if len(r.Password) < 6 {
-		return errors.New("password must be at least 6 characters long")
+
+	// 4. Validate password criteria
+	if len(strings.TrimSpace(r.Password)) < 6 {
+		return errors.New("password must be at least 6 characters long and cannot be only spaces")
 	}
+
 	return nil
 }
 
@@ -30,6 +42,7 @@ type LoginRequestDTO struct {
 }
 
 func (l *LoginRequestDTO) Validate() error {
+	l.Email = strings.ToLower(strings.TrimSpace(l.Email))
 	if strings.TrimSpace(l.Email) == "" || strings.TrimSpace(l.Password) == "" {
 		return errors.New("email and password are required")
 	}

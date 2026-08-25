@@ -363,6 +363,39 @@ for id in $BOOK_2; do curl -i -X DELETE http://localhost:8080/books/$id -H "Auth
 
 ---
 
+### 1. Get All Orders for the Authenticated User (Customer or Admin)
+
+Sends the JWT token in the `Authorization` header to fetch orders tied to that account:
+
+```bash
+curl -i -X GET http://localhost:8080/orders \
+  -H "Authorization: Bearer $CUSTOMER_TOKEN"
+
+```
+
+---
+
+### 2. Get a Specific Order by ID
+
+Fetches full item details and status for a single order record using its UUID:
+
+```bash
+curl -i -X GET http://localhost:8080/orders/YOUR_ORDER_ID_HERE \
+  -H "Authorization: Bearer $CUSTOMER_TOKEN"
+
+```
+
+---
+
+### 3. One-Liner (Login + Fetch Orders Immediately)
+
+If you don't have `$CUSTOMER_TOKEN` saved in your environment variables, run this combined one-liner to log in and immediately return your orders:
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8080/auth/login -H "Content-Type: application/json" -d '{"email":"customer@example.com","password":"password123"}' | jq -r '.token') && curl -i -X GET http://localhost:8080/orders -H "Authorization: Bearer $TOKEN"
+
+```
+
 ## Architectural Limits & Storage Tradeoffs
 
 * **$O(N)$ File I/O Ceiling**: Each repository operation reads and rewrites complete JSON arrays. While thread-safe for local development using `sync.RWMutex`, high-throughput writes present an $O(N)$ overhead.
