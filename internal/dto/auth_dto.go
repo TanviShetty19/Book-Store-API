@@ -2,6 +2,7 @@ package dto
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 	"time"
 )

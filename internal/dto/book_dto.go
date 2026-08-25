@@ -3,7 +3,7 @@ package dto
 import (
 	"errors"
 	"strings"
-	"time"
+	"time" // Re-enabled for BookResponseDTO timestamps
 )
 
 // CreateBookRequestDTO represents the incoming payload to add a new book
@@ -80,4 +80,16 @@ func (u *UpdateBookRequestDTO) Validate() error {
 	}
 
 	return nil
+}
+
+// BookResponseDTO represents the outgoing JSON format for a book
+type BookResponseDTO struct {
+	ID        string    `json:"id"`
+	Title     string    `json:"title"`
+	Author    string    `json:"author"`
+	Price     float64   `json:"price"`
+	Stock     int       `json:"stock"`
+	Version   int       `json:"version"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
