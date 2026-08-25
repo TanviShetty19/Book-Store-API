@@ -44,6 +44,46 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	writeJSONResponse(w, http.StatusCreated, response)
 }
 
+func (h *OrderHandler) ConfirmOrder(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	orderID := vars["id"]
+
+	userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+	if !ok || userID == "" {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized: missing user context")
+		return
+	}
+	userRole, _ := r.Context().Value(middleware.UserRoleKey).(string)
+
+	response, err := h.orderService.ConfirmOrder(r.Context(), userID, userRole, orderID)
+	if err != nil {
+		writeJSONError(w, mapErrorToStatusCode(err), err.Error())
+		return
+	}
+
+	writeJSONResponse(w, http.StatusOK, response)
+}
+
+func (h *OrderHandler) CancelOrder(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	orderID := vars["id"]
+
+	userID, ok := r.Context().Value(middleware.UserIDKey).(string)
+	if !ok || userID == "" {
+		writeJSONError(w, http.StatusUnauthorized, "unauthorized: missing user context")
+		return
+	}
+	userRole, _ := r.Context().Value(middleware.UserRoleKey).(string)
+
+	response, err := h.orderService.CancelOrder(r.Context(), userID, userRole, orderID)
+	if err != nil {
+		writeJSONError(w, mapErrorToStatusCode(err), err.Error())
+		return
+	}
+
+	writeJSONResponse(w, http.StatusOK, response)
+}
+
 func (h *OrderHandler) GetOrderByID(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	orderID := vars["id"]

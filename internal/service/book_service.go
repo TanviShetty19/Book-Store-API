@@ -93,10 +93,6 @@ func (s *bookServiceImpl) UpdateBook(ctx context.Context, id string, req dto.Upd
 		return nil, fmt.Errorf("%w: book not found", apperrors.ErrNotFound)
 	}
 
-	if req.Version != nil && *req.Version != book.Version {
-		return nil, fmt.Errorf("%w: book version mismatch (current: %d, provided: %d)", apperrors.ErrConflict, book.Version, *req.Version)
-	}
-
 	if req.Title != nil {
 		book.Title = strings.TrimSpace(*req.Title)
 	}
@@ -116,9 +112,11 @@ func (s *bookServiceImpl) UpdateBook(ctx context.Context, id string, req dto.Upd
 		book.Stock = *req.Stock
 	}
 
-	book.Version++
 	book.UpdatedAt = time.Now()
 
+	// book.Version is still the version read via GetByID above; the
+	// repository treats it as the CAS-expected value and increments
+	// it internally on a successful, atomic write.
 	if err := s.bookRepo.Update(ctx, book); err != nil {
 		return nil, err
 	}

@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"sync"
 	"time"
 
+	"bookstore-api/internal/apperrors"
 	"bookstore-api/internal/model"
 )
 
@@ -103,6 +105,12 @@ func (r *JsonBookRepository) GetAll(ctx context.Context) ([]*model.Book, error) 
 	return activeBooks, nil
 }
 
+// Update performs an atomic compare-and-swap on the stored book record.
+// Contract: updatedBook.Version must equal the version the caller last
+// read (NOT pre-incremented). On match, the repository applies the
+// mutated fields, increments the stored version internally, and
+// persists — all within the same lock, closing the GetByID-then-Update
+// TOCTOU gap. On mismatch, an apperrors.ErrConflict is returned.
 func (r *JsonBookRepository) Update(ctx context.Context, updatedBook *model.Book) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -112,18 +120,29 @@ func (r *JsonBookRepository) Update(ctx context.Context, updatedBook *model.Book
 		return err
 	}
 
-	found := false
+	idx := -1
 	for i, book := range books {
 		if book.ID == updatedBook.ID && book.DeletedAt == nil {
-			books[i] = *updatedBook
-			found = true
+			idx = i
 			break
 		}
 	}
 
-	if !found {
+	if idx == -1 {
 		return errors.New("book not found or deleted")
 	}
+
+	if books[idx].Version != updatedBook.Version {
+		return fmt.Errorf("%w: book version mismatch (current: %d, provided: %d)", apperrors.ErrConflict, books[idx].Version, updatedBook.Version)
+	}
+
+	books[idx].Title = updatedBook.Title
+	books[idx].Author = updatedBook.Author
+	books[idx].Price = updatedBook.Price
+	books[idx].Stock = updatedBook.Stock
+	books[idx].DeletedAt = updatedBook.DeletedAt
+	books[idx].Version++
+	books[idx].UpdatedAt = time.Now()
 
 	return r.saveBooks(books)
 }

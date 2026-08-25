@@ -21,6 +21,10 @@ type RouterConfig struct {
 func SetupRoutes(cfg RouterConfig) *mux.Router {
 	r := mux.NewRouter()
 
+	r.HandleFunc("/debug/panic", func(w http.ResponseWriter, r *http.Request) {
+		panic("simulated critical database crash!")
+	}).Methods("GET")
+
 	// --- Public Auth Routes ---
 	r.HandleFunc("/auth/login", cfg.AuthHandler.Login).Methods(http.MethodPost)
 	r.HandleFunc("/users/register", cfg.UserHandler.Register).Methods(http.MethodPost)
@@ -40,6 +44,8 @@ func SetupRoutes(cfg RouterConfig) *mux.Router {
 	api.HandleFunc("/orders", cfg.OrderHandler.CreateOrder).Methods(http.MethodPost)
 	api.HandleFunc("/orders", cfg.OrderHandler.GetMyOrders).Methods(http.MethodGet)
 	api.HandleFunc("/orders/{id}", cfg.OrderHandler.GetOrderByID).Methods(http.MethodGet)
+	api.HandleFunc("/orders/{id}/confirm", cfg.OrderHandler.ConfirmOrder).Methods(http.MethodPost)
+	api.HandleFunc("/orders/{id}/cancel", cfg.OrderHandler.CancelOrder).Methods(http.MethodPost)
 
 	// --- Admin-Only Book Operations ---
 	adminBooks := api.PathPrefix("/books").Subrouter()

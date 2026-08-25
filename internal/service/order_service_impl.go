@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"bookstore-api/internal/apperrors"
@@ -73,7 +74,7 @@ func (s *orderServiceImpl) CreateOrder(ctx context.Context, userID string, req d
 		UserID:     userID,
 		Items:      orderItems,
 		TotalPrice: totalPrice,
-		Status:     model.OrderStatusCompleted,
+		Status:     model.OrderStatusPending,
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}
@@ -82,11 +83,73 @@ func (s *orderServiceImpl) CreateOrder(ctx context.Context, userID string, req d
 		return nil, fmt.Errorf("%w: domain validation failed: %v", apperrors.ErrValidation, err)
 	}
 
-	if err := s.orderRepo.CreateOrderWithStockDeduction(ctx, order); err != nil {
+	if err := s.orderRepo.CreateDraftOrder(ctx, order); err != nil {
 		return nil, err
 	}
 
 	return mapOrderToDTO(order), nil
+}
+
+// ConfirmOrder simulates payment processing (unlocked sleep) then delegates
+// to the repository for the atomic re-check + stock deduction + status
+// transition. A fast-fail pre-check avoids sleeping for requests that are
+// already doomed (wrong owner or already confirmed/cancelled).
+func (s *orderServiceImpl) ConfirmOrder(ctx context.Context, userID string, userRole string, orderID string) (*dto.OrderResponseDTO, error) {
+	order, err := s.orderRepo.GetByID(ctx, orderID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: order not found", apperrors.ErrNotFound)
+	}
+
+	if userRole != string(model.RoleAdmin) && order.UserID != userID {
+		return nil, fmt.Errorf("%w: unauthorized access to order", apperrors.ErrForbidden)
+	}
+
+	if order.Status != model.OrderStatusPending {
+		return nil, fmt.Errorf("%w: order is not pending (current status: %s)", apperrors.ErrConflict, order.Status)
+	}
+
+	// Mock payment processing delay. Deliberately unlocked so unrelated
+	// orders/books are never blocked by this simulated latency.
+	time.Sleep(5 * time.Second)
+
+	confirmed, err := s.orderRepo.ConfirmOrder(ctx, orderID)
+	if err != nil {
+		if strings.Contains(err.Error(), "insufficient stock") || strings.Contains(err.Error(), "not pending") || strings.Contains(err.Error(), "version mismatch") {
+			return nil, fmt.Errorf("%w: %v", apperrors.ErrConflict, err)
+		}
+		if strings.Contains(err.Error(), "not found") {
+			return nil, fmt.Errorf("%w: %v", apperrors.ErrNotFound, err)
+		}
+		return nil, err
+	}
+
+	return mapOrderToDTO(confirmed), nil
+}
+
+// CancelOrder transitions a PENDING order owned by the caller (or any order,
+// if caller is admin) to CANCELLED.
+func (s *orderServiceImpl) CancelOrder(ctx context.Context, userID string, userRole string, orderID string) (*dto.OrderResponseDTO, error) {
+	order, err := s.orderRepo.GetByID(ctx, orderID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: order not found", apperrors.ErrNotFound)
+	}
+
+	if userRole != string(model.RoleAdmin) && order.UserID != userID {
+		return nil, fmt.Errorf("%w: unauthorized access to order", apperrors.ErrForbidden)
+	}
+
+	cancelled, err := s.orderRepo.CancelOrder(ctx, orderID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not pending") {
+			return nil, fmt.Errorf("%w: %v", apperrors.ErrConflict, err)
+		}
+		if strings.Contains(err.Error(), "not found") {
+			return nil, fmt.Errorf("%w: %v", apperrors.ErrNotFound, err)
+		}
+		return nil, err
+	}
+
+	return mapOrderToDTO(cancelled), nil
 }
 
 func (s *orderServiceImpl) GetOrderByID(ctx context.Context, userID string, userRole string, orderID string) (*dto.OrderResponseDTO, error) {

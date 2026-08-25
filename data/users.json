@@ -1,1 +1,51 @@
-[]
+[
+  {
+    "id": "f19df0bf-c013-4606-8073-6c03e72bb38f",
+    "email": "admin@example.com",
+    "password": "$2a$10$eCf8vbRvvRRJkmlakkGqy.ngrTxcPZHA1BEvUb6KfI3sw5wflWofS",
+    "role": "ADMIN",
+    "created_at": "2026-08-25T09:54:59.755209+05:30"
+  },
+  {
+    "id": "b1754a4b-8b97-4d1e-a796-a07044b7154e",
+    "email": "customer@example.com",
+    "password": "$2a$10$bJpbNc.Xyozztv3zF3gPMetOAoVAzqFzIjmdZrG47q4y7DX8nNJ62",
+    "role": "CUSTOMER",
+    "created_at": "2026-08-25T09:55:38.453765+05:30"
+  },
+  {
+    "id": "c340b3ad-6388-4f69-88a5-e0dea31544a6",
+    "email": "concurrency_admin@example.com",
+    "password": "$2a$10$6IPEhZYa8UkZUfxEJ6BZJOX87dyG6mQJ/jkJwsCcuUaaLATp2fMK2",
+    "role": "ADMIN",
+    "created_at": "2026-08-25T17:12:00.895178+05:30"
+  },
+  {
+    "id": "5bddeca0-15aa-4db8-9899-12a8c2813240",
+    "email": "admin_race@example.com",
+    "password": "$2a$10$uYfTyq0lkn6HGXuk2JZP8OSI43S26ymru91khoZft0O9hIqChJDq2",
+    "role": "ADMIN",
+    "created_at": "2026-08-25T17:26:00.325363+05:30"
+  },
+  {
+    "id": "e7518de5-9716-4428-a087-7308e0d59ecb",
+    "email": "user_a_race@example.com",
+    "password": "$2a$10$AC/1nYZrr4dqHYp0t4PHTePIEtyh6M2CT2vBe/0rTRybrkspENgYy",
+    "role": "CUSTOMER",
+    "created_at": "2026-08-25T17:30:31.431569+05:30"
+  },
+  {
+    "id": "c7ffac51-d163-4c6e-a05d-4fe4ed091baa",
+    "email": "user_b_race@example.com",
+    "password": "$2a$10$ys/mEZJ3gMQI5JPA1nlCZ.d8G/JsQkSG55t8ipRssmZMACdDJSyue",
+    "role": "CUSTOMER",
+    "created_at": "2026-08-25T17:31:11.934283+05:30"
+  },
+  {
+    "id": "ed702cd3-d2b9-4458-87c0-80bfe32716fb",
+    "email": "user_c_race@example.com",
+    "password": "$2a$10$qaNlX2J2Wt.pC4yQM.cf6ed5CdN8Qx5mDh9n1KVmMFQyCorVvhJcG",
+    "role": "CUSTOMER",
+    "created_at": "2026-08-25T17:38:15.05238+05:30"
+  }
+]
