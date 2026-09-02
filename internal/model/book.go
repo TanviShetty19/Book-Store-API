@@ -7,18 +7,18 @@ import (
 )
 
 type Book struct {
-	ID        string     `json:"id"`
-	Title     string     `json:"title"`
-	Author    string     `json:"author"`
-	Price     float64    `json:"price"`
-	Stock     int        `json:"stock"`
-	Version   int        `json:"version"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	ID        string     `json:"id" bson:"_id"` // BSON _id maps Go ID to Mongo primary key
+	Title     string     `json:"title" bson:"title"`
+	Author    string     `json:"author" bson:"author"`
+	Price     float64    `json:"price" bson:"price"`
+	Stock     int        `json:"stock" bson:"stock"`
+	Version   int        `json:"version" bson:"version"` // Used for Optimistic Locking
+	CreatedAt time.Time  `json:"created_at" bson:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at" bson:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty" bson:"deleted_at,omitempty"` // Soft delete
 }
 
-func (b *Book) CanFulfill(qty int) bool {
+func (b *Book) CheckStock(qty int) bool {
 	return qty > 0 && b.Stock >= qty
 }
 

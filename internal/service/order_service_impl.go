@@ -54,7 +54,7 @@ func (s *orderServiceImpl) CreateOrder(ctx context.Context, userID string, req d
 			return nil, fmt.Errorf("%w: book with ID %s not found", apperrors.ErrNotFound, bookID)
 		}
 
-		if !book.CanFulfill(qty) {
+		if !book.CheckStock(qty) {
 			return nil, fmt.Errorf("%w: insufficient stock for '%s': requested %d, available %d", apperrors.ErrConflict, book.Title, qty, book.Stock)
 		}
 

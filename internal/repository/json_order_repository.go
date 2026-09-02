@@ -117,7 +117,7 @@ func (r *JsonOrderRepository) ConfirmOrder(ctx context.Context, orderID string) 
 		if err != nil {
 			return nil, fmt.Errorf("book with ID %s not found: %w", item.BookID, err)
 		}
-		if !book.CanFulfill(item.Quantity) {
+		if !book.CheckStock(item.Quantity) {
 			return nil, fmt.Errorf("insufficient stock for '%s': requested %d, available %d", book.Title, item.Quantity, book.Stock)
 		}
 		books[item.BookID] = book

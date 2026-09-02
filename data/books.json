@@ -38,5 +38,15 @@
     "version": 2,
     "created_at": "2026-08-25T18:13:42.667647+05:30",
     "updated_at": "2026-08-25T18:17:40.44817+05:30"
+  },
+  {
+    "id": "d23fd423-7fea-4d90-8208-2891c7e03a8d",
+    "title": "Concurrency Test Book",
+    "author": "Test Author",
+    "price": 25,
+    "stock": 0,
+    "version": 2,
+    "created_at": "2026-08-26T09:40:51.322171+05:30",
+    "updated_at": "2026-08-26T09:55:18.49904+05:30"
   }
 ]

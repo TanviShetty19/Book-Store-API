@@ -14,19 +14,19 @@ const (
 )
 
 type OrderItem struct {
-	BookID    string  `json:"book_id"`
-	Quantity  int     `json:"quantity"`
-	UnitPrice float64 `json:"unit_price"`
+	BookID    string  `json:"book_id" bson:"book_id"`
+	Quantity  int     `json:"quantity" bson:"quantity"`
+	UnitPrice float64 `json:"unit_price" bson:"unit_price"`
 }
 
 type Order struct {
-	ID         string      `json:"id"`
-	UserID     string      `json:"user_id"`
-	Items      []OrderItem `json:"items"`
-	TotalPrice float64     `json:"total_price"`
-	Status     OrderStatus `json:"status"`
-	CreatedAt  time.Time   `json:"created_at"`
-	UpdatedAt  time.Time   `json:"updated_at"`
+	ID         string      `json:"id" bson:"_id"`                  // Map ID to Mongo _id
+	UserID     string      `json:"user_id" bson:"user_id"`
+	Items      []OrderItem `json:"items" bson:"items"`
+	TotalPrice float64     `json:"total_price" bson:"total_price"`
+	Status     OrderStatus `json:"status" bson:"status"`
+	CreatedAt  time.Time   `json:"created_at" bson:"created_at"`
+	UpdatedAt  time.Time   `json:"updated_at" bson:"updated_at"`
 }
 
 func (o *Order) Validate() error {

@@ -41,18 +41,21 @@ The application strictly separates concerns into decoupled layers using Go inter
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ Repository Layer (internal/repository)                      │
-│  • Thread-safe JSON storage using file-specific sync.RWMutex│
-│  • Single-file lock boundaries (BookRepo injected into      │
-│    OrderRepo to eliminate dual-lock race conditions)        │
+│  • Pluggable storage via interface abstraction              │
+│    (BookRepository, UserRepository, OrderRepository)        │
+│  • JSON Implementation: Thread-safe file I/O with           │
+│    sync.RWMutex (json_*_repository.go)                      │
+│  • MongoDB Implementation: Native driver with connection    │
+│    pooling & indexes (mongo_*_repository.go)                │
+│  • Atomic CAS operations (Version field enforcement)        │
 │  • Multi-phase stock validation & deduction                 │
 └──────────────────────────┬──────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ Storage (data/)                                             │
-│  • books.json: Catalog with versioning & soft-delete        │
-│  • users.json: Account identities & hashed credentials      │
-│  • orders.json: Order transactions & item snapshots         │
+│ Storage Backends                                            │
+│  • MongoDB: Production persistence with indexes & pooling   │
+│  • JSON Files (data/): Development/testing alternative      │
 └──────────────────────────┴──────────────────────────────────┘
 
 ```
@@ -62,7 +65,7 @@ The application strictly separates concerns into decoupled layers using Go inter
 ## Features
 
 * **Clean Architecture:** Strict layer isolation (Handler $\rightarrow$ Service $\rightarrow$ Repository) using Go interfaces and DTO boundaries.
-* **Thread-Safe File Persistence:** Concurrent safety using dedicated `sync.RWMutex` instances per file (`books.json`, `users.json`, `orders.json`).
+* **Pluggable Storage Backends:** Dual storage support via repository interfaces: production-grade MongoDB with connection pooling (10-100 connections) and indexes, or lightweight JSON files with `sync.RWMutex` for development/testing.
 * **Multi-Phase Stock Deduction:** Order processing executes in two distinct phases (Phase 1: In-memory stock validation; Phase 2: Disk mutations) to prevent partial stock loss on validation errors.
 * **Global Middleware Pipeline:** Standardized request wrapping using `middleware.Chain` incorporating logging, panic recovery, and CORS headers.
 * **Strict Startup Safeguards:** Fail-fast server initialization refusing execution without a configured `JWT_SECRET` environment variable.
@@ -100,11 +103,18 @@ bookstore-api/
 │   │   ├── book.go                 # Book domain model (CanFulfill, Version, Soft-delete)
 │   │   ├── order.go                # Order domain model & status definitions
 │   │   └── user.go                 # User domain model (RoleAdmin, RoleCustomer constants)
+│   ├── db/
+│   │   └── mongo.go                # MongoDB connection pool initialization
 │   ├── repository/
-│   │   ├── book_repository.go      # Book repository interface
-│   │   ├── json_book_repository.go # JSON file storage for books (sync.RWMutex)
-│   │   ├── json_order_repository.go# Order repo injecting BookRepo for thread-safe stock deduction
-│   │   └── json_user_repository.go # JSON storage for user identities
+│   │   ├── book_repository.go      # BookRepository interface
+│   │   ├── json_book_repository.go # JSON file storage (sync.RWMutex)
+│   │   ├── mongo_book_repository.go# MongoDB storage with indexes
+│   │   ├── order_repository.go     # OrderRepository interface
+│   │   ├── json_order_repository.go# JSON order repo (injects BookRepo)
+│   │   ├── mongo_order_repository.go# MongoDB order repo (injects BookRepo)
+│   │   ├── user_repository.go      # UserRepository interface
+│   │   ├── json_user_repository.go # JSON user storage
+│   │   └── mongo_user_repository.go# MongoDB user storage
 │   ├── router/
 │   │   └── router.go               # gorilla/mux route configuration & RBAC binding
 │   └── service/
@@ -127,10 +137,10 @@ bookstore-api/
 
 * **Fail-Fast Environment Configuration**: The server checks for `JWT_SECRET` on startup and aborts execution via `log.Fatal` if unset, preventing accidental deployment with hardcoded fallback keys.
 * **Global Panic Recovery**: Unhandled runtime panics are intercepted by `RecoveryMiddleware`, returning an HTTP `500 Internal Server Error` without crashing the main process.
-* **Single-Lock File Boundaries**: `JsonOrderRepository` receives `BookRepository` via Dependency Injection instead of opening `books.json` directly. Stock mutations route exclusively through `BookRepository.mu`, eliminating multi-lock race conditions over the same physical file.
+* **Pluggable Storage Architecture**: Repository layer abstracts persistence via Go interfaces (`BookRepository`, `UserRepository`, `OrderRepository`). MongoDB implementation uses native driver with connection pooling (10-100 connections), atomic `FindOneAndUpdate` for CAS operations, and case-insensitive unique indexes. JSON implementation uses file-specific `sync.RWMutex` for thread safety.
 * **Multi-Phase Stock Deductions**:
-* **Phase 1 (Validation)**: Iterates over all requested order items, checks stock availability in memory, and validates request shapes without writing to disk.
-* **Phase 2 (Mutation)**: Commits stock deductions to `books.json` and writes the new order to `orders.json` only after all items pass Phase 1 validation.
+  * **Phase 1 (Validation)**: Iterates over all requested order items, checks stock availability in memory, and validates request shapes without writing to storage.
+  * **Phase 2 (Mutation)**: Commits stock deductions and order status updates atomically. MongoDB uses `FindOneAndUpdate` with status filters; JSON uses mutex-guarded two-pass validation.
 
 
 * **Case-Insensitive Duplicate Prevention**: Utilizes `strings.EqualFold()` to prevent duplicate Book entries (Title + Author) and duplicate user registrations (Email).
@@ -171,6 +181,31 @@ bookstore-api/
 
 ---
 
+## Storage Backends
+
+The application supports two storage backends via a pluggable repository pattern, selectable at runtime using the `STORAGE_TYPE` environment variable.
+
+### MongoDB (Recommended for Production)
+
+- **Native Driver**: Uses `go.mongodb.org/mongo-driver` with connection pooling (10-100 connections)
+- **Atomic CAS Operations**: `FindOneAndUpdate` with version filters for optimistic locking
+- **Case-Insensitive Unique Indexes**: 
+  - Books: Compound index on `(title, author)` with collation strength 2
+  - Users: Unique index on `email` with case-insensitive matching
+- **Partial Indexes**: Excludes soft-deleted documents (`deleted_at: nil`) from uniqueness constraints
+- **Graceful Connection Lifecycle**: Context-based timeouts for connect/ping/disconnect operations
+- **Repository Implementations**: `mongo_book_repository.go`, `mongo_user_repository.go`, `mongo_order_repository.go`
+
+### JSON Files (Development/Testing)
+
+- **Thread-Safe File I/O**: Dedicated `sync.RWMutex` per file (`books.json`, `users.json`, `orders.json`)
+- **In-Memory CAS**: Version comparison under mutex lock before write
+- **Suitable For**: Local development, CI/CD testing, demos, and prototyping
+- **Scalability Limit**: Not recommended for production workloads exceeding ~1000 records per file
+- **Repository Implementations**: `json_book_repository.go`, `json_user_repository.go`, `json_order_repository.go`
+
+---
+
 ## Getting Started
 
 ### Prerequisites
@@ -187,31 +222,34 @@ cd Book-Store-API
 ```
 
 
-2. **Initialize fresh JSON storage files:**
+2. **Configure environment variables:**
+
+**Required Environment Variables**
+
+| Variable | Required For | Description | Example |
+|----------|--------------|-------------|---------|
+| `JWT_SECRET` | All | Secret key for JWT signing/verification. Server refuses to start if unset. | `your-super-secret-key-change-in-prod` |
+| `STORAGE_TYPE` | All | Storage backend selector: `mongo` or `json`. Defaults to `mongo`. | `mongo` |
+| `MONGO_URI` | MongoDB only | MongoDB connection string with credentials and cluster info. | `mongodb+srv://user:pass@cluster.mongodb.net/` |
+| `MONGO_DB_NAME` | MongoDB only | Target database name within the MongoDB cluster. | `bookstore_prod` |
+| `PORT` | Optional | HTTP server port. Defaults to `:8080`. | `:3000` |
+
+**Setup Example (MongoDB - Production):**
 ```bash
-echo "[]" > data/users.json && echo "[]" > data/books.json && echo "[]" > data/orders.json
-
-```
-
-
-3. **Set the mandatory `JWT_SECRET` environment variable:**
-```bash
-# Linux / macOS
 export JWT_SECRET="your-super-secret-key-change-in-prod"
-
-# Windows (Command Prompt)
-set JWT_SECRET=your-super-secret-key-change-in-prod
-
-# Windows (PowerShell)
-$env:JWT_SECRET="your-super-secret-key-change-in-prod"
-
+export STORAGE_TYPE="mongo"
+export MONGO_URI="mongodb+srv://user:pass@cluster.mongodb.net/"
+export MONGO_DB_NAME="bookstore_prod"
+go run cmd/api/main.go
 ```
 
-
-4. **Start the API server:**
+**Setup Example (JSON Files - Development):**
 ```bash
+export JWT_SECRET="dev-secret-key"
+export STORAGE_TYPE="json"
+# Initialize empty JSON files
+echo "[]" > data/users.json && echo "[]" > data/books.json && echo "[]" > data/orders.json
 go run cmd/api/main.go
-
 ```
 
 
@@ -396,10 +434,81 @@ TOKEN=$(curl -s -X POST http://localhost:8080/auth/login -H "Content-Type: appli
 
 ```
 
+---
+
+## MongoDB Inspection & Verification (mongosh)
+
+If running with `STORAGE_TYPE=mongo`, use these commands to inspect database state directly:
+
+```bash
+# Connect to your MongoDB cluster
+mongosh "mongodb+srv://user:pass@cluster.mongodb.net/bookstore_prod"
+
+# List all collections
+show collections
+
+# Verify indexes on books collection (should show unique compound index on title+author)
+db.books.getIndexes()
+
+# Count active (non-deleted) books
+db.books.countDocuments({ deleted_at: null })
+
+# Inspect a specific book by ID
+db.books.findOne({ _id: "BOOK_ID_HERE" })
+
+# Verify version increments after stock deduction
+db.books.find({ title: "Go Design Patterns" }, { title: 1, stock: 1, version: 1 })
+
+# List all orders for a specific user
+db.orders.find({ user_id: "USER_ID_HERE" })
+
+# Check order status distribution
+db.orders.aggregate([
+  { $group: { _id: "$status", count: { $sum: 1 } } }
+])
+
+# Verify unique email constraint on users collection
+db.users.getIndexes()
+db.users.findOne({ email: /customer@example.com/i })
+
+# Check connection pool stats (requires admin privileges)
+db.serverStatus().connections
+```
+
+---
+
 ## Architectural Limits & Storage Tradeoffs
 
-* **$O(N)$ File I/O Ceiling**: Each repository operation reads and rewrites complete JSON arrays. While thread-safe for local development using `sync.RWMutex`, high-throughput writes present an $O(N)$ overhead.
-* **Non-Transactional Multi-File Writes**: In file-based storage systems lacking database Write-Ahead Logs (WAL), multi-file atomicity (`books.json` and `orders.json`) cannot withstand unexpected operating system power failures mid-write. Production environments resolve this by transitioning from JSON repositories to an ACID-compliant relational database (such as PostgreSQL).
+### MongoDB Backend
+
+- **Connection Pool Overhead:** Configured with 10-100 connection pool size. Under extreme load, pool exhaustion may cause request queueing (mitigated via `SetMaxConnIdleTime` and `SetServerSelectionTimeout`).
+- **Network Latency:** Remote MongoDB clusters introduce network round-trip overhead compared to local file I/O. Partially offset by connection pooling and batch operations.
+- **Dependency:** Requires external MongoDB cluster availability. Outages block all persistence operations (no local fallback).
+
+### JSON Backend
+
+- **$O(N)$ File I/O Ceiling:** Each operation reads/writes complete JSON arrays. Thread-safe via `sync.RWMutex`, but high-throughput writes present $O(N)$ overhead.
+- **Non-Transactional Multi-File Writes:** Lacks database Write-Ahead Logs (WAL). Multi-file atomicity (`books.json` + `orders.json`) cannot withstand unexpected OS power failures mid-write.
+- **Scalability Limit:** Suitable for development/testing only. Not recommended for production workloads exceeding ~1000 records per file.
+
+**Recommendation:** Use MongoDB (`STORAGE_TYPE=mongo`) for production deployments. Use JSON (`STORAGE_TYPE=json`) for local development, CI/CD testing, and demos.
+
+---
+
+## Dependencies
+
+Core Go packages:
+- `github.com/gorilla/mux` - HTTP routing and middleware
+- `github.com/golang-jwt/jwt/v5` - JWT authentication
+- `golang.org/x/crypto/bcrypt` - Password hashing
+- `github.com/google/uuid` - UUID generation
+- `github.com/joho/godotenv` - Environment variable loading from `.env` files
+- `go.mongodb.org/mongo-driver` - Official MongoDB driver with connection pooling
+
+Install all dependencies:
+```bash
+go mod download
+```
 
 ---
 

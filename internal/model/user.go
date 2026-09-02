@@ -15,11 +15,11 @@ const (
 )
 
 type User struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Password  string    `json:"password"`
-	Role      UserRole  `json:"role"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        string    `json:"id" bson:"_id"`
+	Email     string    `json:"email" bson:"email"`
+	Password  string    `json:"-" bson:"password"` // Omitted from JSON output, preserved in BSON
+	Role      UserRole  `json:"role" bson:"role"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at"`
 }
 
 func (u *User) Validate() error {

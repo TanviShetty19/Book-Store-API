@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # --- MONGODB DATABASE SERVICE ---
+  mongodb:
+    image: mongo:7.0
+    container_name: bookstore_mongo
+    restart: always
+    ports:
+      - "27017:27017" # Expose Mongo to host machine for local development/debugging
+    environment:
+      MONGO_INITDB_DATABASE: bookstore
+    volumes:
+      - mongo_data:/data/db # Persist database data across container restarts
+    networks:
+      - bookstore-network
+
+  # --- GO BOOKSTORE API SERVICE ---
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bookstore_api
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=:8080
+      - STORAGE_TYPE=mongo
+      # Note: 'mongodb' matches the service name defined above in docker-compose
+      - MONGO_URI=mongodb://mongodb:27017
+      - MONGO_DB_NAME=bookstore
+      - JWT_SECRET=super_secret_jwt_signing_key_change_in_production
+    depends_on:
+      - mongodb
+    networks:
+      - bookstore-network
+
+# Shared Persistent Volume for MongoDB
+volumes:
+  mongo_data:
+
+# Internal Docker Network allowing API to communicate with MongoDB by service name
+networks:
+  bookstore-network:
+    driver: bridge

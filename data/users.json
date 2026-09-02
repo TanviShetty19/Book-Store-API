@@ -47,5 +47,33 @@
     "password": "$2a$10$qaNlX2J2Wt.pC4yQM.cf6ed5CdN8Qx5mDh9n1KVmMFQyCorVvhJcG",
     "role": "CUSTOMER",
     "created_at": "2026-08-25T17:38:15.05238+05:30"
+  },
+  {
+    "id": "60f4db13-541b-440e-871f-2bc895ed0742",
+    "email": "new_admin@example.com",
+    "password": "$2a$10$LmgB4IFT2kDsEzCNrpDjueoPU57WSfrKgLcypw9fmQrlEpGLzHMOW",
+    "role": "ADMIN",
+    "created_at": "2026-08-26T09:36:41.445561+05:30"
+  },
+  {
+    "id": "41b88e5f-a828-434b-b875-87403681e536",
+    "email": "new_user_a@example.com",
+    "password": "$2a$10$XQxnIQ5YDnRoYODW6JTVcupAcy.lchdGCA1onDJSBI0JI0HsWOBbK",
+    "role": "CUSTOMER",
+    "created_at": "2026-08-26T09:36:55.026716+05:30"
+  },
+  {
+    "id": "efadcb46-8a6f-46b6-85f9-f220b94e5fb2",
+    "email": "new_user_b@example.com",
+    "password": "$2a$10$tVNVaHKpj11bRF86lE7N4.ngJrtNY/ZhnPzNTtvmt1U2.SoKDqeLS",
+    "role": "CUSTOMER",
+    "created_at": "2026-08-26T09:37:03.931788+05:30"
+  },
+  {
+    "id": "da8e6519-9b93-4a10-ae4a-c792d2d8d0af",
+    "email": "new_user_c@example.com",
+    "password": "$2a$10$fOyGO0EHG/StE8Za2J9pJe.l/u7PK/dlLaP49UQKoHzX.MfD2It6C",
+    "role": "CUSTOMER",
+    "created_at": "2026-08-26T09:41:04.458574+05:30"
   }
 ]

@@ -14,3 +14,6 @@ main
 # OS Specific
 .DS_Store
 Thumbs.db
+
+# environment
+.env
