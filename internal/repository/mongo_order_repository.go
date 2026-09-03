@@ -158,24 +158,33 @@ func (r *MongoOrderRepository) GetByID(ctx context.Context, id string) (*model.O
 }
 
 // GetByUserID fetches all orders associated with a specific user ID.
-func (r *MongoOrderRepository) GetByUserID(ctx context.Context, userID string) ([]*model.Order, error) {
-	cursor, err := r.collection.Find(ctx, bson.M{"user_id": userID})
+func (r *MongoOrderRepository) GetByUserID(ctx context.Context, userID string, offset, limit int64) ([]*model.Order, error) {
+	// 1. Set default fallback limits and safety bounds
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// 2. Configure MongoDB options (skip, limit, and sorting by created_at desc)
+	findOpts := options.Find().
+		SetSkip(offset).
+		SetLimit(limit).
+		SetSort(bson.D{{Key: "created_at", Value: -1}}) // Show latest orders first
+
+	cursor, err := r.collection.Find(ctx, bson.M{"user_id": userID}, findOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query user orders: %w", err)
 	}
 	defer cursor.Close(ctx)
 
 	var userOrders []*model.Order
-	for cursor.Next(ctx) {
-		var order model.Order
-		if err := cursor.Decode(&order); err != nil {
-			return nil, fmt.Errorf("failed to decode order: %w", err)
-		}
-		userOrders = append(userOrders, &order)
-	}
-
-	if err := cursor.Err(); err != nil {
-		return nil, err
+	if err := cursor.All(ctx, &userOrders); err != nil {
+		return nil, fmt.Errorf("failed to decode user orders: %w", err)
 	}
 
 	return userOrders, nil

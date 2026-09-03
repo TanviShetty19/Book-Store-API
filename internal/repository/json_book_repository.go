@@ -87,7 +87,7 @@ func (r *JsonBookRepository) GetByID(ctx context.Context, id string) (*model.Boo
 	return nil, errors.New("book not found")
 }
 
-func (r *JsonBookRepository) GetAll(ctx context.Context) ([]*model.Book, error) {
+func (r *JsonBookRepository) GetAll(ctx context.Context, offset, limit int64) ([]*model.Book, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -102,7 +102,22 @@ func (r *JsonBookRepository) GetAll(ctx context.Context) ([]*model.Book, error) 
 			activeBooks = append(activeBooks, &books[i])
 		}
 	}
-	return activeBooks, nil
+	// Apply pagination
+	if offset < 0 {
+		offset = 0
+	}
+	if limit <= 0 {
+		limit = int64(len(activeBooks))
+	}
+	end := offset + limit
+	if end > int64(len(activeBooks)) {
+		end = int64(len(activeBooks))
+	}
+	if offset >= int64(len(activeBooks)) {
+		return []*model.Book{}, nil
+	}
+	return activeBooks[offset:end], nil
+
 }
 
 // Update performs an atomic compare-and-swap on the stored book record.

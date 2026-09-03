@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"bookstore-api/internal/apperrors"
 	"bookstore-api/internal/dto"
@@ -107,7 +108,18 @@ func (h *OrderHandler) GetMyOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orders, err := h.orderService.GetUserOrders(r.Context(), userID)
+	offsetStr := r.URL.Query().Get("offset")
+	limitStr := r.URL.Query().Get("limit")
+
+	var offset, limit int64
+	if offsetStr != "" {
+		offset, _ = strconv.ParseInt(offsetStr, 10, 64)
+	}
+	if limitStr != "" {
+		limit, _ = strconv.ParseInt(limitStr, 10, 64)
+	}
+
+	orders, err := h.orderService.GetUserOrders(r.Context(), userID, offset, limit)
 	if err != nil {
 		writeJSONError(w, mapErrorToStatusCode(err), err.Error())
 		return

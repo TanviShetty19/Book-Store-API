@@ -78,26 +78,34 @@ func (r *MongoBookRepository) GetByID(ctx context.Context, id string) (*model.Bo
 }
 
 // GetAll aligns with JsonBookRepository signature: ([]*model.Book, error)
-func (r *MongoBookRepository) GetAll(ctx context.Context) ([]*model.Book, error) {
+func (r *MongoBookRepository) GetAll(ctx context.Context, offset, limit int64) ([]*model.Book, error) {
+	// 1. Set default fallback limits and safety bounds
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100 // Prevent memory exhaustion from huge page requests
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// 2. Configure MongoDB skip and limit options
+	findOpts := options.Find().
+		SetSkip(offset).
+		SetLimit(limit)
+
 	filter := bson.M{"deleted_at": nil}
 
-	cursor, err := r.collection.Find(ctx, filter)
+	cursor, err := r.collection.Find(ctx, filter, findOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query books: %w", err)
 	}
 	defer cursor.Close(ctx)
 
 	var activeBooks []*model.Book
-	for cursor.Next(ctx) {
-		var book model.Book
-		if err := cursor.Decode(&book); err != nil {
-			return nil, fmt.Errorf("failed to decode book: %w", err)
-		}
-		activeBooks = append(activeBooks, &book)
-	}
-
-	if err := cursor.Err(); err != nil {
-		return nil, err
+	if err := cursor.All(ctx, &activeBooks); err != nil {
+		return nil, fmt.Errorf("failed to decode books: %w", err)
 	}
 
 	return activeBooks, nil
@@ -106,7 +114,7 @@ func (r *MongoBookRepository) GetAll(ctx context.Context) ([]*model.Book, error)
 // Update performs an atomic compare-and-swap on MongoDB matching JSON contract.
 func (r *MongoBookRepository) Update(ctx context.Context, updatedBook *model.Book) error {
 	filter := bson.M{
-		"_id":        updatedBook.ID,  //Book ID of the book you want to update
+		"_id":        updatedBook.ID,      //Book ID of the book you want to update
 		"version":    updatedBook.Version, // Expected current version before increment
 		"deleted_at": nil,
 	}

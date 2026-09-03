@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"bookstore-api/internal/dto"
 	"bookstore-api/internal/service"
@@ -48,7 +49,10 @@ func (h *BookHandler) GetBookByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookHandler) GetAllBooks(w http.ResponseWriter, r *http.Request) {
-	books, err := h.bookService.GetAllBooks(r.Context())
+	offset, _ := strconv.ParseInt(r.URL.Query().Get("offset"), 10, 64)
+	limit, _ := strconv.ParseInt(r.URL.Query().Get("limit"), 10, 64)
+
+	books, err := h.bookService.GetAllBooks(r.Context(), offset, limit)
 	if err != nil {
 		writeJSONError(w, mapErrorToStatusCode(err), err.Error())
 		return

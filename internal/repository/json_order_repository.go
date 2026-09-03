@@ -197,7 +197,7 @@ func (r *JsonOrderRepository) GetByID(ctx context.Context, id string) (*model.Or
 	return nil, errors.New("order not found")
 }
 
-func (r *JsonOrderRepository) GetByUserID(ctx context.Context, userID string) ([]*model.Order, error) {
+func (r *JsonOrderRepository) GetByUserID(ctx context.Context, userID string, offset, limit int64) ([]*model.Order, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -212,5 +212,19 @@ func (r *JsonOrderRepository) GetByUserID(ctx context.Context, userID string) ([
 			userOrders = append(userOrders, &orders[i])
 		}
 	}
-	return userOrders, nil
+	// Apply pagination
+	if offset < 0 {
+		offset = 0
+	}
+	if limit <= 0 {
+		limit = int64(len(userOrders))
+	}
+	end := offset + limit
+	if end > int64(len(userOrders)) {
+		end = int64(len(userOrders))
+	}
+	if offset >= int64(len(userOrders)) {
+		return []*model.Order{}, nil
+	}
+	return userOrders[offset:end], nil
 }

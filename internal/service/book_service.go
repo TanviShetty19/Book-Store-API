@@ -17,7 +17,7 @@ import (
 type BookService interface {
 	CreateBook(ctx context.Context, req dto.CreateBookRequestDTO) (*dto.BookResponseDTO, error)
 	GetBookByID(ctx context.Context, id string) (*dto.BookResponseDTO, error)
-	GetAllBooks(ctx context.Context) ([]*dto.BookResponseDTO, error)
+	GetAllBooks(ctx context.Context, offset, limit int64) ([]*dto.BookResponseDTO, error)
 	UpdateBook(ctx context.Context, id string, req dto.UpdateBookRequestDTO) (*dto.BookResponseDTO, error)
 	DeleteBook(ctx context.Context, id string) error
 }
@@ -38,7 +38,8 @@ func (s *bookServiceImpl) CreateBook(ctx context.Context, req dto.CreateBookRequ
 		return nil, fmt.Errorf("%w: price must be greater than zero", apperrors.ErrValidation)
 	}
 
-	existingBooks, err := s.bookRepo.GetAll(ctx)
+	// Fetch up to the repository max limit (100) to check for duplicate entries
+	existingBooks, err := s.bookRepo.GetAll(ctx, 0, 100)
 	if err == nil {
 		for _, b := range existingBooks {
 			if strings.EqualFold(strings.TrimSpace(b.Title), strings.TrimSpace(req.Title)) &&
@@ -74,8 +75,8 @@ func (s *bookServiceImpl) GetBookByID(ctx context.Context, id string) (*dto.Book
 	return mapBookToDTO(book), nil
 }
 
-func (s *bookServiceImpl) GetAllBooks(ctx context.Context) ([]*dto.BookResponseDTO, error) {
-	books, err := s.bookRepo.GetAll(ctx)
+func (s *bookServiceImpl) GetAllBooks(ctx context.Context, offset, limit int64) ([]*dto.BookResponseDTO, error) {
+	books, err := s.bookRepo.GetAll(ctx, offset, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -114,9 +115,6 @@ func (s *bookServiceImpl) UpdateBook(ctx context.Context, id string, req dto.Upd
 
 	book.UpdatedAt = time.Now()
 
-	// book.Version is still the version read via GetByID above; the
-	// repository treats it as the CAS-expected value and increments
-	// it internally on a successful, atomic write.
 	if err := s.bookRepo.Update(ctx, book); err != nil {
 		return nil, err
 	}

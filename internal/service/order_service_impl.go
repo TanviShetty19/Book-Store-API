@@ -165,8 +165,8 @@ func (s *orderServiceImpl) GetOrderByID(ctx context.Context, userID string, user
 	return mapOrderToDTO(order), nil
 }
 
-func (s *orderServiceImpl) GetUserOrders(ctx context.Context, userID string) ([]*dto.OrderResponseDTO, error) {
-	orders, err := s.orderRepo.GetByUserID(ctx, userID)
+func (s *orderServiceImpl) GetUserOrders(ctx context.Context, userID string, offset, limit int64) ([]*dto.OrderResponseDTO, error) {
+	orders, err := s.orderRepo.GetByUserID(ctx, userID, offset, limit)
 	if err != nil {
 		return nil, err
 	}
